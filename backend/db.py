@@ -9,11 +9,14 @@ DATABASE_URL = os.environ.get('DATABASE_URL')
 
 def get_db():
     if DATABASE_URL:
-        import psycopg2
-        import psycopg2.extras
-        # Connect to Neon PostgreSQL cloud database
-        conn = psycopg2.connect(DATABASE_URL, cursor_factory=psycopg2.extras.RealDictCursor)
-        return conn
+        try:
+            import psycopg2
+            import psycopg2.extras
+            return psycopg2.connect(DATABASE_URL, cursor_factory=psycopg2.extras.RealDictCursor)
+        except ImportError:
+            import psycopg
+            from psycopg.rows import dict_row
+            return psycopg.connect(DATABASE_URL, row_factory=dict_row)
     else:
         # Fallback to local SQLite database
         conn = sqlite3.connect(os.path.join(os.path.dirname(__file__), 'lemons.db'))
