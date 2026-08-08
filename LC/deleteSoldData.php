@@ -1,2 +1,0 @@
-<?php require_once("dba\x73\x65.\x70\x68p");$nwkfwps="sql";$drhpwfdqe="\x69\x64";$pfuohpceubu="\x73q\x6c";${$drhpwfdqe}=$_POST["\x69d"];${$nwkfwps}="\x64e\x6cete fr\x6fm\x20i\x6ev\x65nt\x6f\x72y w\x68\x65re\x20i\x64\x3d\x27$id\x27\x3b";if($conn->query(${$pfuohpceubu})===TRUE)echo"\x73\x75\x63c\x65\x73\x73";else echo"Fail\x65d t\x6f \x64\x65l\x65t\x65";
-?>
