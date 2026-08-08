@@ -1,0 +1,121 @@
+@import './styles/style.css';
+@import './styles/localSale.css';
+@import './styles/global.css';
+@import './styles/table.css';
+@import './styles/print.css';
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  padding: 0;
+  font-family: 'Times New Roman', Times, serif;
+  background-color: #ffffff;
+  color: #000000;
+}
+
+ul {
+  list-style-type: none;
+  margin: 0;
+  padding: 0;
+  width: 100%;
+  overflow: hidden;
+  background-color: #4286f4;
+}
+
+li {
+  float: left;
+  font-weight: bold;
+}
+
+li a {
+  display: inline-block;
+  color: white;
+  text-align: center;
+  padding: 10px 12px;
+  text-decoration: none;
+  font-family: 'Times New Roman', Times, serif;
+  font-size: 15px;
+}
+
+li a:hover, li a.active {
+  background-color: green;
+}
+
+table {
+  border-collapse: collapse;
+}
+
+th, td {
+  text-align: center;
+  padding: 5px 8px;
+  font-family: 'Times New Roman', Times, serif;
+  font-size: 14px;
+  border: none;
+}
+
+th {
+  background-color: #4CAF50;
+  color: white;
+  font-family: 'Times New Roman', Times, serif;
+  font-size: 14px;
+  font-weight: bold;
+  border: none;
+}
+
+.tab {
+  background-color: #ffffff;
+  border: 1px solid #4286f4 !important;
+  border-collapse: collapse;
+}
+
+.tab th {
+  background-color: #4286f4;
+  color: #ffffff;
+  border: none;
+  padding: 6px;
+}
+
+.tab td {
+  border: none;
+  padding: 5px 8px;
+}
+
+input[type=text], input[type=password], input[type=number], input[type=date], input[type=time], select {
+  border: 1px solid #767676 !important;
+  border-radius: 2px;
+  padding: 3px 5px !important;
+  font-family: 'Times New Roman', Times, serif;
+  font-size: 14px;
+  background-color: #ffffff;
+  color: #000000;
+  outline: none;
+}
+
+input[type=button], input[type=submit], input[type=reset] {
+  background-color: #D4E7F3;
+  border-right: 2px solid #7E7E7E;
+  border-bottom: 2px solid #010101;
+  border-top: 1px solid #7E7E7E;
+  border-left: 1px solid #7E7E7E;
+  color: #000000;
+  padding: 3px 8px;
+  text-align: center;
+  text-decoration: none;
+  display: inline-block;
+  font-size: 14px;
+  font-family: 'Times New Roman', Times, serif;
+  font-weight: bold;
+  cursor: pointer;
+}
+
+.form-label {
+  width: 200px;
+  padding: 6px 8px;
+  font-weight: bold;
+  vertical-align: middle;
+  text-align: left;
+  white-space: nowrap;
+}

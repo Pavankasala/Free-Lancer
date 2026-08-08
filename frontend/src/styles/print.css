@@ -1,0 +1,26 @@
+@page{
+margin-left: 0px;
+margin-right: 0px;
+margin-top: 0px;
+margin-bottom: 0px;
+
+}
+ footer {page-break-after: always;}
+
+table { page-break-inside:auto }
+tr    { page-break-inside:avoid; page-break-after:auto; }
+thead { display:table-header-group; }
+tfoot { display:table-footer-group; }
+table ,tr, td {
+	
+	font-size:11px;
+		}
+	
+	.printtable {
+    
+    margin-left: 40px;
+}
+.globalprinttable
+{
+	margin-left: 5px;
+}
