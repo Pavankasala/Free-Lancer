@@ -1,0 +1,11 @@
+# Ignore Python backend files from Vercel frontend deployment
+backend/
+app.py
+db.py
+wsgi.py
+requirements.txt
+Dockerfile
+docker-compose.yml
+render.yaml
+LC/
+*.py
