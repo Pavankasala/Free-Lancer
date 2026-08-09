@@ -131,6 +131,10 @@ def init_db():
             cursor.execute("ALTER TABLE user ADD COLUMN email TEXT")
         except sqlite3.OperationalError:
             pass
+        try:
+            cursor.execute("ALTER TABLE user ADD COLUMN address TEXT")
+        except sqlite3.OperationalError:
+            pass
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS inventory (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,

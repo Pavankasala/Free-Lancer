@@ -15,7 +15,7 @@ from routes import (
 )
 
 app = Flask(__name__)
-CORS(app)
+CORS(app, resources={r"/*": {"origins": "*"}}, supports_credentials=True)
 
 # Initialize database and migrations on startup
 db.init_db()

@@ -8,7 +8,7 @@ export default function BuyersDetails({ user, onLogout }) {
   const [billdate, setBilldate] = useState(new Date().toISOString().split('T')[0]);
   const [name, setName] = useState('');
   const [channels, setChannels] = useState([{ bags: '', price: '' }]);
-  const [hamali, setHamali] = useState(user?.default_hamali || 10);
+  const [hamali, setHamali] = useState(user?.default_hamali || 0);
   const [advance, setAdvance] = useState('');
   const [advanceDate, setAdvanceDate] = useState(new Date().toISOString().split('T')[0]);
   const [advanceTime, setAdvanceTime] = useState(() => {

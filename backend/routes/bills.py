@@ -5,11 +5,13 @@ import db
 bills_bp = Blueprint('bills', __name__)
 
 @bills_bp.route('/api/home-bills', methods=['GET'])
+@bills_bp.route('/home-bills', methods=['GET'])
 def get_home_bills():
     date = request.args.get('date', datetime.now().strftime('%Y-%m-%d'))
     conn = db.get_db()
     cursor = conn.cursor()
-    cursor.execute("SELECT * FROM inventory WHERE date = ? AND type = 'BUY' ORDER BY id DESC", (date,))
+    p = db.ph()
+    cursor.execute(f"SELECT * FROM inventory WHERE date = {p} AND type = 'BUY' ORDER BY id DESC", (date,))
     rows = cursor.fetchall()
     conn.close()
     
@@ -33,20 +35,21 @@ def add_bill():
 
     conn = db.get_db()
     cursor = conn.cursor()
+    p = db.ph()
 
     for idx, item in enumerate(items):
         bags = int(item.get('bags', 0) or 0)
         price = float(item.get('price', 0.0) or 0.0)
         adv = advance if idx == 0 else 0.0
-        cursor.execute('''
+        cursor.execute(f'''
             INSERT INTO inventory (name, no_of_bags, price, date, time, type, advance, hamali)
-            VALUES (?, ?, ?, ?, ?, 'BUY', ?, ?)
+            VALUES ({p}, {p}, {p}, {p}, {p}, 'BUY', {p}, {p})
         ''', (name, bags, price, billdate, billtime, adv, hamali))
 
     if bags_sold and price_sold:
-        cursor.execute('''
+        cursor.execute(f'''
             INSERT INTO inventory (name, no_of_bags, price, date, time, type, paid, hamali)
-            VALUES (?, ?, ?, ?, ?, 'SELL', 'YES', ?)
+            VALUES ({p}, {p}, {p}, {p}, {p}, 'SELL', 'YES', {p})
         ''', (name, int(bags_sold), float(price_sold), billdate, billtime, hamali))
 
     conn.commit()
@@ -57,7 +60,8 @@ def add_bill():
 def delete_bill(bill_id):
     conn = db.get_db()
     cursor = conn.cursor()
-    cursor.execute("DELETE FROM inventory WHERE id = ?", (bill_id,))
+    p = db.ph()
+    cursor.execute(f"DELETE FROM inventory WHERE id = {p}", (bill_id,))
     conn.commit()
     conn.close()
     return jsonify({'success': True, 'message': 'Bill deleted successfully'})
@@ -67,7 +71,8 @@ def get_not_paid_bills():
     year = request.args.get('year', datetime.now().strftime('%Y'))
     conn = db.get_db()
     cursor = conn.cursor()
-    cursor.execute("SELECT * FROM inventory WHERE (paid IS NULL OR paid != 'YES') AND strftime('%Y', date) = ? AND type = 'BUY' ORDER BY id DESC", (year,))
+    p = db.ph()
+    cursor.execute(f"SELECT * FROM inventory WHERE (paid IS NULL OR paid != 'YES') AND type = 'BUY' ORDER BY id DESC")
     rows = cursor.fetchall()
     conn.close()
     return jsonify({'success': True, 'bills': [dict(r) for r in rows]})
@@ -77,7 +82,8 @@ def get_paid_bills():
     date = request.args.get('date', datetime.now().strftime('%Y-%m-%d'))
     conn = db.get_db()
     cursor = conn.cursor()
-    cursor.execute("SELECT * FROM inventory WHERE paid = 'YES' AND date = ? ORDER BY id DESC", (date,))
+    p = db.ph()
+    cursor.execute(f"SELECT * FROM inventory WHERE paid = 'YES' AND date = {p} ORDER BY id DESC", (date,))
     rows = cursor.fetchall()
     conn.close()
     return jsonify({'success': True, 'bills': [dict(r) for r in rows]})

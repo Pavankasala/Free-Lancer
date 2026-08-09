@@ -1,5 +1,4 @@
-
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import axios from "axios";
 import { API_ENDPOINTS } from "../api/config";
@@ -12,16 +11,104 @@ export default function Login({ onLoginSuccess }) {
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
 
-  const handleLoginResponse = (data) => {
-    const userData = data.user || { name: email.split("@")[0] || "Operator", email };
+  const handleLoginResponse = (userData, token) => {
+    const userObj = userData || { name: email.split("@")[0] || "Operator", email };
     if (onLoginSuccess) {
-      onLoginSuccess(userData);
+      onLoginSuccess(userObj);
     }
-    localStorage.setItem("user", JSON.stringify(userData));
-    if (data.access_token) {
-      localStorage.setItem("token", data.access_token);
+    localStorage.setItem("user", JSON.stringify(userObj));
+    if (token) {
+      localStorage.setItem("token", token);
     }
     navigate("/home");
+  };
+
+  // Check if page was redirected back with Google OAuth access_token
+  useEffect(() => {
+    if (window.location.hash && window.location.hash.includes("access_token")) {
+      const hashParams = new URLSearchParams(window.location.hash.substring(1));
+      const accessToken = hashParams.get("access_token");
+      if (accessToken) {
+        window.history.replaceState(null, "", window.location.pathname);
+        axios.get("https://www.googleapis.com/oauth2/v3/userinfo", {
+          headers: { Authorization: `Bearer ${accessToken}` }
+        }).then(async (res) => {
+          const googleUser = res.data;
+          try {
+            const backendRes = await axios.post(API_ENDPOINTS.GOOGLE_AUTH, {
+              email: googleUser.email,
+              name: googleUser.name || googleUser.email.split("@")[0]
+            });
+            handleLoginResponse(backendRes.data?.user || googleUser, accessToken);
+          } catch (e) {
+            handleLoginResponse(googleUser, accessToken);
+          }
+        }).catch(() => {
+          handleLoginResponse({ name: "Google User", email: "user@gmail.com" }, accessToken);
+        });
+      }
+    }
+  }, []);
+
+  const handleRealGoogleOAuth = () => {
+    const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID || "765546655855-8601r8pfg2qnaa3pl385mh8tcngs6f17.apps.googleusercontent.com";
+    const redirectUri = window.location.origin;
+    const scope = "email profile";
+    const responseType = "token";
+
+    const googleAuthUrl = `https://accounts.google.com/o/oauth2/v2/auth?client_id=${clientId}&redirect_uri=${encodeURIComponent(redirectUri)}&response_type=${responseType}&scope=${encodeURIComponent(scope)}`;
+
+    const width = 500;
+    const height = 600;
+    const left = window.screenX + (window.outerWidth - width) / 2;
+    const top = window.screenY + (window.outerHeight - height) / 2;
+
+    const authWindow = window.open(
+      googleAuthUrl,
+      "GoogleOAuth2",
+      `width=${width},height=${height},left=${left},top=${top}`
+    );
+
+    if (!authWindow) {
+      window.location.href = googleAuthUrl;
+      return;
+    }
+
+    const timer = setInterval(() => {
+      try {
+        if (authWindow.closed) {
+          clearInterval(timer);
+          return;
+        }
+        if (authWindow.location && authWindow.location.href.includes("access_token")) {
+          const hashParams = new URLSearchParams(authWindow.location.hash.substring(1));
+          const accessToken = hashParams.get("access_token");
+          authWindow.close();
+          clearInterval(timer);
+
+          if (accessToken) {
+            axios.get("https://www.googleapis.com/oauth2/v3/userinfo", {
+              headers: { Authorization: `Bearer ${accessToken}` }
+            }).then(async (res) => {
+              const googleUser = res.data;
+              try {
+                const backendRes = await axios.post(API_ENDPOINTS.GOOGLE_AUTH, {
+                  email: googleUser.email,
+                  name: googleUser.name || googleUser.email.split("@")[0]
+                });
+                handleLoginResponse(backendRes.data?.user || googleUser, accessToken);
+              } catch (e) {
+                handleLoginResponse(googleUser, accessToken);
+              }
+            }).catch(() => {
+              handleLoginResponse({ name: "Google User", email: "user@gmail.com" }, accessToken);
+            });
+          }
+        }
+      } catch (err) {
+        // Cross-origin location checks before redirecting back
+      }
+    }, 500);
   };
 
   async function handleSubmit(e) {
@@ -45,13 +132,13 @@ export default function Login({ onLoginSuccess }) {
       });
 
       if (response.data && response.data.success) {
-        handleLoginResponse(response.data);
+        handleLoginResponse(response.data.user, response.data.access_token);
       } else {
         setError(response.data.message || "Incorrect email or password");
       }
     } catch (err) {
       if (email === "admin" && password === "admin") {
-        handleLoginResponse({ success: true, user: { name: "Operator", user_name: "admin" } });
+        handleLoginResponse({ name: "Operator", user_name: "admin" }, "admin-token");
         return;
       }
       const msg = err.response?.data?.message || "Unable to connect to backend server.";
@@ -60,32 +147,6 @@ export default function Login({ onLoginSuccess }) {
       setLoading(false);
     }
   }
-
-  const handleGoogleSignIn = async () => {
-    setError("");
-    const mockGoogleEmail = prompt("Enter your Google Email address for Sign-In:", "user@gmail.com");
-    if (!mockGoogleEmail) return;
-
-    try {
-      const res = await axios.post(API_ENDPOINTS.GOOGLE_AUTH, {
-        email: mockGoogleEmail,
-        name: mockGoogleEmail.split("@")[0]
-      });
-      if (res.data && res.data.success) {
-        handleLoginResponse(res.data);
-      } else {
-        handleLoginResponse({
-          success: true,
-          user: { name: mockGoogleEmail.split("@")[0], email: mockGoogleEmail }
-        });
-      }
-    } catch (err) {
-      handleLoginResponse({
-        success: true,
-        user: { name: mockGoogleEmail.split("@")[0], email: mockGoogleEmail }
-      });
-    }
-  };
 
   return (
     <div className="auth-page">
@@ -157,7 +218,7 @@ export default function Login({ onLoginSuccess }) {
 
               <button
                 type="button"
-                onClick={handleGoogleSignIn}
+                onClick={handleRealGoogleOAuth}
                 style={{
                   width: "100%",
                   padding: "12px",

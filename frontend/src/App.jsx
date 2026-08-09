@@ -30,6 +30,12 @@ export default function App() {
     localStorage.setItem('user', JSON.stringify(userData));
   };
 
+  const handleUpdateUser = (updatedData) => {
+    const newUser = { ...user, ...updatedData };
+    setUser(newUser);
+    localStorage.setItem('user', JSON.stringify(newUser));
+  };
+
   const handleLogout = () => {
     setUser(null);
     localStorage.removeItem('user');
@@ -41,7 +47,7 @@ export default function App() {
         <Route path="/" element={<Login onLoginSuccess={handleLoginSuccess} />} />
         <Route path="/login" element={<Login onLoginSuccess={handleLoginSuccess} />} />
         <Route path="/signup" element={<Signup onLoginSuccess={handleLoginSuccess} />} />
-        <Route path="/home" element={user ? <Home user={user} onLogout={handleLogout} /> : <Navigate to="/" />} />
+        <Route path="/home" element={user ? <Home user={user} onLogout={handleLogout} onUpdateUser={handleUpdateUser} /> : <Navigate to="/" />} />
         
         {/* Buyers Details */}
         <Route path="/buyers-details" element={user ? <BuyersDetails user={user} onLogout={handleLogout} /> : <Navigate to="/" />} />
@@ -84,12 +90,12 @@ export default function App() {
         {/* Shops & Miscellaneous */}
         <Route path="/shops" element={user ? <Shops user={user} onLogout={handleLogout} /> : <Navigate to="/" />} />
         <Route path="/bags" element={user ? <Bags user={user} onLogout={handleLogout} /> : <Navigate to="/" />} />
-        <Route path="/settings" element={user ? <Settings user={user} onLogout={handleLogout} /> : <Navigate to="/" />} />
+        <Route path="/settings" element={user ? <Settings user={user} onLogout={handleLogout} onUpdateUser={handleUpdateUser} /> : <Navigate to="/" />} />
         <Route path="/kisans" element={user ? <Kisans user={user} onLogout={handleLogout} /> : <Navigate to="/" />} />
 
         {/* Alias routes */}
-        <Route path="/bills" element={user ? <Home user={user} onLogout={handleLogout} /> : <Navigate to="/" />} />
-        <Route path="/advance" element={user ? <Home user={user} onLogout={handleLogout} /> : <Navigate to="/" />} />
+        <Route path="/bills" element={user ? <Home user={user} onLogout={handleLogout} onUpdateUser={handleUpdateUser} /> : <Navigate to="/" />} />
+        <Route path="/advance" element={user ? <Home user={user} onLogout={handleLogout} onUpdateUser={handleUpdateUser} /> : <Navigate to="/" />} />
         
         <Route path="*" element={<Navigate to="/" />} />
       </Routes>

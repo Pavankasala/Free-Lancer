@@ -3,12 +3,16 @@ import { useEffect, useState } from 'react';
 import Header from '../components/Header';
 import TimePicker from '../components/TimePicker';
 import BillModal from '../components/BillModal';
+import UserProfileModal from '../components/UserProfileModal';
 
-export default function Home({ user, onLogout }) {
+export default function Home({ user, onLogout, onUpdateUser }) {
+  const [isProfileModalOpen, setIsProfileModalOpen] = useState(() => {
+    return user && (!user.address || !user.phone || !user.business_name);
+  });
   const [billdate, setBilldate] = useState(new Date().toISOString().split('T')[0]);
   const [name, setName] = useState('');
   const [channels, setChannels] = useState([{ bags: '', price: '' }]);
-  const [hamali, setHamali] = useState(user?.default_hamali || 10);
+  const [hamali, setHamali] = useState(user?.default_hamali || 0);
   const [advance, setAdvance] = useState('');
   const [advanceDate, setAdvanceDate] = useState(new Date().toISOString().split('T')[0]);
   const [advanceTime, setAdvanceTime] = useState(() => {
@@ -322,6 +326,28 @@ export default function Home({ user, onLogout }) {
                             </button>
                             <button
                               type="button"
+                              onClick={() => {
+                                const billTime = b.time || b.advanceTime || '10:15 AM';
+                                const text = `Agri Commission Manager: Bill #${b.id} for ${b.name} (${b.date} ${billTime}) - ${b.no_of_bags} Bags @ Rs.${b.price} = Total Rs.${(b.no_of_bags * b.price) - (b.advance || 0)}`;
+                                navigator.clipboard.writeText(text);
+                                setSelectedBill(b);
+                              }}
+                              style={{
+                                backgroundColor: '#16a34a',
+                                color: '#ffffff',
+                                border: 'none',
+                                borderRadius: '3px',
+                                padding: '2px 8px',
+                                cursor: 'pointer',
+                                marginRight: '6px',
+                                fontSize: '12px',
+                                fontWeight: 'bold'
+                              }}
+                            >
+                              📱 SMS
+                            </button>
+                            <button
+                              type="button"
                               onClick={() => setConfirmDeleteId(b.id)}
                               style={{
                                 backgroundColor: '#dc2626',
@@ -349,10 +375,9 @@ export default function Home({ user, onLogout }) {
       </div>
 
       <BillModal bill={selectedBill} onClose={() => setSelectedBill(null)} />
-
-      {confirmDeleteId && (
-        <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(15, 23, 42, 0.65)', backdropFilter: 'blur(4px)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 2000, padding: '16px' }}>
-          <div style={{ backgroundColor: '#ffffff', borderRadius: '12px', width: '100%', maxWidth: '400px', padding: '24px', textAlign: 'center', boxShadow: '0 20px 25px -5px rgba(0,0,0,0.2)', border: '1px solid #cbd5e1' }}>
+      {confirmDeleteId !== null && (
+        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0, 0, 0, 0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
+          <div style={{ backgroundColor: '#ffffff', borderRadius: '12px', padding: '24px', width: '90%', maxWidth: '400px', textAlign: 'center', boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1)' }}>
             <h3 style={{ margin: '0 0 10px 0', color: '#dc2626', fontSize: '1.25rem' }}>Confirm Delete</h3>
             <p style={{ margin: '0 0 20px 0', fontSize: '1rem', color: '#334155' }}>
               Are you sure you want to delete this bill?
@@ -379,6 +404,15 @@ export default function Home({ user, onLogout }) {
           </div>
         </div>
       )}
+
+      <UserProfileModal
+        isOpen={isProfileModalOpen}
+        onClose={() => setIsProfileModalOpen(false)}
+        user={user}
+        onSaveSuccess={(updated) => {
+          if (onUpdateUser) onUpdateUser(updated);
+        }}
+      />
     </div>
   );
 }

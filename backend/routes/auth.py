@@ -94,9 +94,11 @@ def signup():
     }), 201
 
 
-@auth_bp.route('/api/google-auth', methods=['POST'])
-@auth_bp.route('/google-auth', methods=['POST'])
+@auth_bp.route('/api/google-auth', methods=['POST', 'OPTIONS'])
+@auth_bp.route('/google-auth', methods=['POST', 'OPTIONS'])
 def google_auth():
+    if request.method == 'OPTIONS':
+        return jsonify({'success': True}), 200
     data = request.get_json() or {}
     email = (data.get('email') or '').strip()
     name = (data.get('name') or 'Google User').strip()
@@ -131,4 +133,61 @@ def google_auth():
         'success': True,
         'user': user_dict,
         'access_token': f"google-token-{user_dict.get('user_id', 1)}"
+    })
+
+
+@auth_bp.route('/api/update-profile', methods=['POST', 'OPTIONS'])
+def update_profile():
+    if request.method == 'OPTIONS':
+        return jsonify({'success': True}), 200
+
+    data = request.get_json() or {}
+    user_id = data.get('user_id') or data.get('id')
+    user_name = data.get('user_name') or 'admin'
+
+    name = data.get('name') or data.get('owner_name') or 'Operator'
+    company_full_name = data.get('company_full_name') or data.get('business_name') or 'Agri Commission Manager'
+    mobile = data.get('mobile') or data.get('phone') or '9866123445'
+    address = data.get('address') or 'MAINROAD, NAKREKAL'
+    default_hamali = float(data.get('default_hamali', 0.0) or 0.0)
+
+    conn = db.get_db()
+    cursor = conn.cursor()
+    p = db.ph()
+    table = '"user"' if db.DATABASE_URL else 'user'
+
+    if user_id:
+        cursor.execute(f'''
+            UPDATE {table}
+            SET name = {p}, company_full_name = {p}, mobile = {p}, address = {p}, default_hamali = {p}
+            WHERE user_id = {p}
+        ''', (name, company_full_name, mobile, address, default_hamali, user_id))
+    else:
+        cursor.execute(f'''
+            UPDATE {table}
+            SET name = {p}, company_full_name = {p}, mobile = {p}, address = {p}, default_hamali = {p}
+            WHERE user_name = {p}
+        ''', (name, company_full_name, mobile, address, default_hamali, user_name))
+
+    conn.commit()
+
+    if user_id:
+        cursor.execute(f"SELECT * FROM {table} WHERE user_id = {p}", (user_id,))
+    else:
+        cursor.execute(f"SELECT * FROM {table} WHERE user_name = {p}", (user_name,))
+
+    updated_user = cursor.fetchone()
+    conn.close()
+
+    user_dict = dict(updated_user) if updated_user else {}
+    user_dict.pop('password', None)
+    user_dict['business_name'] = company_full_name
+    user_dict['owner_name'] = name
+    user_dict['phone'] = mobile
+    user_dict['address'] = address
+
+    return jsonify({
+        'success': True,
+        'message': 'Profile updated successfully',
+        'user': user_dict
     })
