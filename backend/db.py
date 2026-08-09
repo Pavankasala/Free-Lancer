@@ -23,6 +23,10 @@ def get_db():
         conn.row_factory = sqlite3.Row
         return conn
 
+def ph():
+    """Returns %s for PostgreSQL and ? for SQLite"""
+    return "%s" if DATABASE_URL else "?"
+
 def init_db():
     conn = get_db()
     cursor = conn.cursor()
@@ -33,6 +37,7 @@ def init_db():
             CREATE TABLE IF NOT EXISTS "user" (
                 user_id SERIAL PRIMARY KEY,
                 user_name VARCHAR(100) UNIQUE,
+                email VARCHAR(255),
                 password VARCHAR(255),
                 user_type VARCHAR(20),
                 name VARCHAR(100),
@@ -108,6 +113,7 @@ def init_db():
             CREATE TABLE IF NOT EXISTS user (
                 user_id INTEGER PRIMARY KEY AUTOINCREMENT,
                 user_name TEXT UNIQUE,
+                email TEXT,
                 password TEXT,
                 user_type TEXT,
                 name TEXT,
@@ -121,6 +127,10 @@ def init_db():
                 license_expires_on TEXT
             )
         ''')
+        try:
+            cursor.execute("ALTER TABLE user ADD COLUMN email TEXT")
+        except sqlite3.OperationalError:
+            pass
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS inventory (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,

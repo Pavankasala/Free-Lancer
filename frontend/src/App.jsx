@@ -37,6 +37,8 @@ export default function App() {
     <BrowserRouter>
       <Routes>
         <Route path="/" element={<Login onLoginSuccess={handleLoginSuccess} />} />
+        <Route path="/login" element={<Login onLoginSuccess={handleLoginSuccess} />} />
+        <Route path="/signup" element={<Signup onLoginSuccess={handleLoginSuccess} />} />
         <Route path="/home" element={user ? <Home user={user} onLogout={handleLogout} /> : <Navigate to="/" />} />
         
         {/* Buyers Details */}

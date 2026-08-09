@@ -3,6 +3,8 @@ export const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://127.0.0
 
 export const API_ENDPOINTS = {
   LOGIN: `${API_BASE_URL}/api/login`,
+  SIGNUP: `${API_BASE_URL}/api/signup`,
+  GOOGLE_AUTH: `${API_BASE_URL}/api/google-auth`,
   HOME_BILLS: `${API_BASE_URL}/api/home-bills`,
   ADD_BILL: `${API_BASE_URL}/api/add-bill`,
   DELETE_BILL: (id) => `${API_BASE_URL}/api/delete-bill/${id}`,

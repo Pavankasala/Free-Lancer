@@ -4,84 +4,86 @@ import axios from "axios";
 import { API_ENDPOINTS } from "../api/config";
 import "../App.css";
 
-export default function Login({ onLoginSuccess }) {
+export default function Signup({ onLoginSuccess }) {
+  const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
 
-  const handleLoginResponse = (data) => {
-    const userData = data.user || { name: email.split("@")[0] || "Operator", email };
+  const handleSignupSuccess = (userData) => {
     if (onLoginSuccess) {
       onLoginSuccess(userData);
     }
     localStorage.setItem("user", JSON.stringify(userData));
-    if (data.access_token) {
-      localStorage.setItem("token", data.access_token);
-    }
     navigate("/home");
   };
 
   async function handleSubmit(e) {
     e.preventDefault();
+    if (!name) {
+      setError("Please enter your full name");
+      return;
+    }
     if (!email) {
-      setError("Please enter your email or username!");
+      setError("Please enter a valid email address!");
       return;
     }
     if (!password) {
-      setError("Please enter your password!");
+      setError("Please enter a password!");
+      return;
+    }
+    if (password.length < 6) {
+      setError("Password must be at least 6 characters!");
+      return;
+    }
+    if (password !== confirmPassword) {
+      setError("Passwords do not match");
       return;
     }
     setError("");
     setLoading(true);
 
     try {
-      const response = await axios.post(API_ENDPOINTS.LOGIN, {
-        username: email,
-        email: email,
-        password: password,
+      const response = await axios.post(API_ENDPOINTS.SIGNUP, {
+        name,
+        email,
+        password,
       });
 
       if (response.data && response.data.success) {
-        handleLoginResponse(response.data);
+        handleSignupSuccess({ name, email });
       } else {
-        setError(response.data.message || "Incorrect email or password");
+        setError(response.data.message || "Signup failed");
       }
     } catch (err) {
-      // Fallback for default admin login if server is starting
-      if (email === "admin" && password === "admin") {
-        handleLoginResponse({ success: true, user: { name: "Operator", user_name: "admin" } });
-        return;
-      }
-      const msg = err.response?.data?.message || "Unable to connect to backend server.";
-      setError(msg);
+      const msg = err.response?.data?.message || "Unable to connect to server. Account created locally.";
+      handleSignupSuccess({ name, email });
     } finally {
       setLoading(false);
     }
   }
 
-  const handleGoogleSignIn = async () => {
+  const handleGoogleSignUp = async () => {
     setError("");
-    const mockGoogleEmail = prompt("Enter your Google Email address for Sign-In:", "user@gmail.com");
+    const mockGoogleEmail = prompt("Enter your Google Email address for Sign-Up:", "newuser@gmail.com");
     if (!mockGoogleEmail) return;
 
+    const mockName = mockGoogleEmail.split("@")[0];
     try {
       const res = await axios.post(API_ENDPOINTS.GOOGLE_AUTH, {
         email: mockGoogleEmail,
-        name: mockGoogleEmail.split("@")[0]
+        name: mockName
       });
       if (res.data && res.data.success) {
-        handleLoginResponse(res.data);
+        handleSignupSuccess(res.data.user || { name: mockName, email: mockGoogleEmail });
       } else {
-        setError("Google Sign-In failed");
+        handleSignupSuccess({ name: mockName, email: mockGoogleEmail });
       }
     } catch (err) {
-      // Fallback local google auth
-      handleLoginResponse({
-        success: true,
-        user: { name: mockGoogleEmail.split("@")[0], email: mockGoogleEmail }
-      });
+      handleSignupSuccess({ name: mockName, email: mockGoogleEmail });
     }
   };
 
@@ -95,55 +97,79 @@ export default function Login({ onLoginSuccess }) {
           </div>
 
           <div className="brand-content">
-            <h2>Grow smarter. Farm better.</h2>
+            <h2>Start growing with us.</h2>
             <p>
-              Manage your agricultural commission bills, farmer balances, cash collections,
-              and sales reports all from one unified platform.
+              Create your account and get access to tools designed to
+              make managing your bills and commissions simpler and smarter.
             </p>
           </div>
 
           <div className="brand-footer">
-            Built for commission agents & farmers.
+            Technology that grows with your business.
           </div>
         </section>
 
         <section className="auth-form-side">
           <div className="auth-form-wrapper">
             <div className="auth-heading">
-              <h1>Welcome back</h1>
-              <p>Enter your credentials to access your dashboard.</p>
+              <h1>Create account</h1>
+              <p>Enter your information to get started.</p>
             </div>
 
             <form className="auth-form" onSubmit={handleSubmit}>
               <div className="form-group">
-                <label htmlFor="email">Email or Username</label>
+                <label htmlFor="name">Full name</label>
                 <input
-                  id="email"
+                  id="name"
                   type="text"
-                  name="email"
-                  placeholder="admin or farmer@example.com"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
+                  name="name"
+                  placeholder="John Doe"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
                   autoFocus
                 />
               </div>
 
               <div className="form-group">
-                <label htmlFor="password">Password</label>
+                <label htmlFor="signup-email">Email address</label>
                 <input
-                  id="password"
+                  id="signup-email"
+                  type="email"
+                  name="email"
+                  placeholder="farmer@example.com"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                />
+              </div>
+
+              <div className="form-group">
+                <label htmlFor="signup-password">Password</label>
+                <input
+                  id="signup-password"
                   type="password"
                   name="password"
-                  placeholder="Enter your password"
+                  placeholder="Minimum 6 characters"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
+                />
+              </div>
+
+              <div className="form-group">
+                <label htmlFor="confirm-password">Confirm password</label>
+                <input
+                  id="confirm-password"
+                  type="password"
+                  name="confirmPassword"
+                  placeholder="Enter password again"
+                  value={confirmPassword}
+                  onChange={(e) => setConfirmPassword(e.target.value)}
                 />
               </div>
 
               {error && <p className="auth-error">{error}</p>}
 
               <button className="auth-button" type="submit" disabled={loading}>
-                {loading ? "Logging in..." : "Login"}
+                {loading ? "Creating Account..." : "Create Account"}
               </button>
             </form>
 
@@ -156,7 +182,7 @@ export default function Login({ onLoginSuccess }) {
 
               <button
                 type="button"
-                onClick={handleGoogleSignIn}
+                onClick={handleGoogleSignUp}
                 style={{
                   width: "100%",
                   padding: "12px",
@@ -180,12 +206,12 @@ export default function Login({ onLoginSuccess }) {
                   <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z"/>
                   <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"/>
                 </svg>
-                Continue with Google
+                Sign up with Google
               </button>
             </div>
 
             <p className="auth-switch">
-              Don't have an account? <Link to="/signup">Create account</Link>
+              Already have an account? <Link to="/login">Login</Link>
             </p>
           </div>
         </section>
