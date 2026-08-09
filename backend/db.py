@@ -9,15 +9,23 @@ DATABASE_URL = os.environ.get('DATABASE_URL')
 
 def get_db():
     if DATABASE_URL:
+        # Enforce sslmode=require for Neon PostgreSQL connection pooler if missing
+        conn_str = DATABASE_URL
+        if 'sslmode' not in conn_str and 'localhost' not in conn_str and '127.0.0.1' not in conn_str:
+            conn_str += '?sslmode=require' if '?' not in conn_str else '&sslmode=require'
+
         try:
             import psycopg2
             import psycopg2.extras
-            return psycopg2.connect(DATABASE_URL, cursor_factory=psycopg2.extras.RealDictCursor)
+            conn = psycopg2.connect(conn_str, cursor_factory=psycopg2.extras.RealDictCursor)
+            return conn
         except ImportError:
             import psycopg
             from psycopg.rows import dict_row
-            return psycopg.connect(DATABASE_URL, row_factory=dict_row)
+            conn = psycopg.connect(conn_str, row_factory=dict_row)
+            return conn
     else:
+        # Local SQLite database
         conn = sqlite3.connect(os.path.join(os.path.dirname(__file__), 'lemons.db'))
         conn.row_factory = sqlite3.Row
         return conn
@@ -31,28 +39,31 @@ def init_db():
     cursor = conn.cursor()
     
     if DATABASE_URL:
-        # PostgreSQL Schema
+        # PostgreSQL Schema for Neon
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS "user" (
                 user_id SERIAL PRIMARY KEY,
                 user_name VARCHAR(100) UNIQUE,
-                email VARCHAR(255),
+                email VARCHAR(255) UNIQUE,
                 password VARCHAR(255),
-                user_type VARCHAR(20),
+                user_type VARCHAR(20) DEFAULT 'OPE',
                 name VARCHAR(100),
                 company_name VARCHAR(200),
                 company_full_name VARCHAR(250),
                 mobile VARCHAR(50),
+                address TEXT,
                 commission REAL DEFAULT 5.0,
                 less_for_damages REAL DEFAULT 0.0,
                 icf REAL DEFAULT 1.0,
                 default_hamali REAL DEFAULT 10.0,
-                license_expires_on VARCHAR(50)
+                license_expires_on VARCHAR(50),
+                auth_provider VARCHAR(50) DEFAULT 'LOCAL'
             );
         ''')
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS inventory (
                 id SERIAL PRIMARY KEY,
+                user_id INT,
                 name VARCHAR(100),
                 no_of_bags INT DEFAULT 0,
                 village VARCHAR(100),
@@ -76,6 +87,7 @@ def init_db():
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS sold_data (
                 id SERIAL PRIMARY KEY,
+                user_id INT,
                 date VARCHAR(50),
                 name VARCHAR(100),
                 sold_to VARCHAR(100),
@@ -93,6 +105,7 @@ def init_db():
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS kisans (
                 id SERIAL PRIMARY KEY,
+                user_id INT,
                 name VARCHAR(100),
                 mobile VARCHAR(50)
             );
@@ -100,6 +113,7 @@ def init_db():
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS expenditures (
                 id SERIAL PRIMARY KEY,
+                user_id INT,
                 date VARCHAR(50),
                 description TEXT,
                 amount REAL DEFAULT 0.0
@@ -108,6 +122,7 @@ def init_db():
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS cash_collection (
                 id SERIAL PRIMARY KEY,
+                user_id INT,
                 date VARCHAR(50),
                 amount REAL DEFAULT 0.0,
                 given_by VARCHAR(100)
@@ -116,6 +131,7 @@ def init_db():
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS shops (
                 id SERIAL PRIMARY KEY,
+                user_id INT,
                 name VARCHAR(100),
                 city VARCHAR(100),
                 mobile VARCHAR(50)
@@ -124,6 +140,7 @@ def init_db():
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS sms_logs (
                 id SERIAL PRIMARY KEY,
+                user_id INT,
                 date VARCHAR(50),
                 mobile VARCHAR(50),
                 message TEXT,
@@ -133,17 +150,21 @@ def init_db():
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS bags_config (
                 id SERIAL PRIMARY KEY,
+                user_id INT,
                 bag_type VARCHAR(100),
                 capacity VARCHAR(50)
             );
         ''')
-        cursor.execute("SELECT * FROM \"user\" WHERE user_name = 'admin'")
+        
+        # Seed default Admin user if not exists
+        cursor.execute("SELECT * FROM \"user\" WHERE LOWER(user_name) = 'admin' OR LOWER(email) = 'admin@agricommission.com'")
         if not cursor.fetchone():
             pwd_hash = hashlib.md5("admin".encode()).hexdigest()
             cursor.execute('''
-                INSERT INTO "user" (user_name, password, user_type, name, company_name, company_full_name, mobile, commission, less_for_damages, icf, default_hamali, license_expires_on)
-                VALUES ('admin', %s, 'OPE', 'Operator', 'S.L.C Lemon Company', 'Lemon & Fruit Exports Commission Agent', '9866123445', 5.0, 0.0, 1.0, 10.0, '2030-12-31')
+                INSERT INTO "user" (user_name, email, password, user_type, name, company_name, company_full_name, mobile, commission, default_hamali, license_expires_on)
+                VALUES ('admin', 'admin@agricommission.com', %s, 'OPE', 'Operator', 'S.L.C Lemon Company', 'Lemon & Fruit Exports Commission Agent', '9866123445', 5.0, 10.0, '2030-12-31')
             ''', (pwd_hash,))
+
         conn.commit()
         conn.close()
     else:
@@ -152,23 +173,26 @@ def init_db():
             CREATE TABLE IF NOT EXISTS user (
                 user_id INTEGER PRIMARY KEY AUTOINCREMENT,
                 user_name TEXT UNIQUE,
-                email TEXT,
+                email TEXT UNIQUE,
                 password TEXT,
-                user_type TEXT,
+                user_type TEXT DEFAULT 'OPE',
                 name TEXT,
                 company_name TEXT,
                 company_full_name TEXT,
                 mobile TEXT,
+                address TEXT,
                 commission REAL DEFAULT 5.0,
                 less_for_damages REAL DEFAULT 0.0,
                 icf REAL DEFAULT 1.0,
                 default_hamali REAL DEFAULT 10.0,
-                license_expires_on TEXT
+                license_expires_on TEXT,
+                auth_provider TEXT DEFAULT 'LOCAL'
             )
         ''')
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS inventory (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER,
                 name TEXT,
                 no_of_bags INTEGER DEFAULT 0,
                 village TEXT,
@@ -192,6 +216,7 @@ def init_db():
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS sold_data (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER,
                 date TEXT,
                 name TEXT,
                 sold_to TEXT,
@@ -209,6 +234,7 @@ def init_db():
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS kisans (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER,
                 name TEXT,
                 mobile TEXT
             )
@@ -216,6 +242,7 @@ def init_db():
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS expenditures (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER,
                 date TEXT,
                 description TEXT,
                 amount REAL DEFAULT 0.0
@@ -224,6 +251,7 @@ def init_db():
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS cash_collection (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER,
                 date TEXT,
                 amount REAL DEFAULT 0.0,
                 given_by TEXT
@@ -232,6 +260,7 @@ def init_db():
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS shops (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER,
                 name TEXT,
                 city TEXT,
                 mobile TEXT
@@ -240,6 +269,7 @@ def init_db():
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS sms_logs (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER,
                 date TEXT,
                 mobile TEXT,
                 message TEXT,
@@ -249,17 +279,23 @@ def init_db():
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS bags_config (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER,
                 bag_type TEXT,
                 capacity TEXT
             )
         ''')
 
-        # Migrations for existing database
+        # Migrations
         for alter in [
             "ALTER TABLE user ADD COLUMN email TEXT",
             "ALTER TABLE user ADD COLUMN address TEXT",
+            "ALTER TABLE user ADD COLUMN auth_provider TEXT DEFAULT 'LOCAL'",
+            "ALTER TABLE inventory ADD COLUMN user_id INTEGER",
             "ALTER TABLE inventory ADD COLUMN time TEXT",
-            "ALTER TABLE inventory ADD COLUMN confirmed INTEGER DEFAULT 0"
+            "ALTER TABLE inventory ADD COLUMN confirmed INTEGER DEFAULT 0",
+            "ALTER TABLE sold_data ADD COLUMN user_id INTEGER",
+            "ALTER TABLE expenditures ADD COLUMN user_id INTEGER",
+            "ALTER TABLE cash_collection ADD COLUMN user_id INTEGER"
         ]:
             try:
                 cursor.execute(alter)
@@ -269,12 +305,12 @@ def init_db():
         cursor.execute("UPDATE inventory SET time = '12:00 PM' WHERE time IS NULL OR time = ''")
 
         # Seed default Admin
-        cursor.execute("SELECT * FROM user WHERE user_name = 'admin'")
+        cursor.execute("SELECT * FROM user WHERE LOWER(user_name) = 'admin' OR LOWER(email) = 'admin@agricommission.com'")
         if not cursor.fetchone():
             pwd_hash = hashlib.md5("admin".encode()).hexdigest()
             cursor.execute('''
-                INSERT INTO user (user_name, password, user_type, name, company_name, company_full_name, mobile, commission, less_for_damages, icf, default_hamali, license_expires_on)
-                VALUES ('admin', ?, 'OPE', 'Operator', 'S.L.C Lemon Company', 'Lemon & Fruit Exports Commission Agent', '9866123445', 5.0, 0.0, 1.0, 10.0, '2030-12-31')
+                INSERT INTO user (user_name, email, password, user_type, name, company_name, company_full_name, mobile, commission, default_hamali, license_expires_on)
+                VALUES ('admin', 'admin@agricommission.com', ?, 'OPE', 'Operator', 'S.L.C Lemon Company', 'Lemon & Fruit Exports Commission Agent', '9866123445', 5.0, 10.0, '2030-12-31')
             ''', (pwd_hash,))
 
         conn.commit()
@@ -282,4 +318,4 @@ def init_db():
 
 if __name__ == '__main__':
     init_db()
-    print("Database initialized successfully!")
+    print("Database initialized successfully with unified user schemas!")

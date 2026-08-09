@@ -33,7 +33,6 @@ class AgriCommissionManagerTestCase(unittest.TestCase):
         self.assertFalse(data['success'])
 
     def test_04_kisan_bill_creation_and_status(self):
-        # Test creating Kisan bill with multiple channels
         payload = {
             'name': 'Test Kisan',
             'billdate': '2026-08-09',
@@ -43,14 +42,13 @@ class AgriCommissionManagerTestCase(unittest.TestCase):
                 {'bags': 5, 'price': 500}
             ],
             'hamali': 10,
-            'advance': 100 # Advance < Total (12,500), should be PENDING / paid='NO'
+            'advance': 100
         }
         res = self.client.post('/api/add-bill', json=payload)
         data = json.loads(res.data)
         self.assertEqual(res.status_code, 200)
         self.assertTrue(data['success'])
 
-        # Verify bill retrieved in /api/home-bills
         res2 = self.client.get('/api/home-bills?date=2026-08-09')
         data2 = json.loads(res2.data)
         self.assertTrue(data2['success'])
@@ -59,7 +57,6 @@ class AgriCommissionManagerTestCase(unittest.TestCase):
         self.assertEqual(found[0]['paid'], 'NO')
 
     def test_05_bill_update_and_confirm_edge_cases(self):
-        # Create a bill first
         res = self.client.post('/api/add-bill', json={
             'name': 'Update Bill Kisan',
             'no_of_bags': 50,
@@ -69,24 +66,20 @@ class AgriCommissionManagerTestCase(unittest.TestCase):
         })
         self.assertEqual(res.status_code, 200)
 
-        # Get the ID
         res2 = self.client.get('/api/home-bills?date=2026-08-09')
         data2 = json.loads(res2.data)
         target = [b for b in data2['bills'] if b['name'] == 'Update Bill Kisan'][0]
         bill_id = target['id']
 
-        # Confirm the bill
         res_confirm = self.client.post(f'/api/confirm-bill/{bill_id}')
         self.assertEqual(res_confirm.status_code, 200)
 
-        # Verify it's confirmed
         res3 = self.client.get('/api/home-bills?date=2026-08-09')
         data3 = json.loads(res3.data)
         confirmed_bill = [b for b in data3['bills'] if b['id'] == bill_id][0]
         self.assertEqual(confirmed_bill['paid'], 'YES')
         self.assertEqual(confirmed_bill['confirmed'], 1)
 
-        # Update the bill with Advance < Total (e.g., advance = 10) -> Should revert to paid='NO'
         res_update = self.client.put(f'/api/update-bill/{bill_id}', json={
             'name': 'Update Bill Kisan',
             'no_of_bags': 50,
@@ -96,14 +89,12 @@ class AgriCommissionManagerTestCase(unittest.TestCase):
         })
         self.assertEqual(res_update.status_code, 200)
 
-        # Verify it reverted back to PENDING
         res4 = self.client.get('/api/home-bills?date=2026-08-09')
         data4 = json.loads(res4.data)
         updated_bill = [b for b in data4['bills'] if b['id'] == bill_id][0]
         self.assertEqual(updated_bill['paid'], 'NO')
 
     def test_06_advance_single_and_multi_creation(self):
-        # Single Advance
         res = self.client.post('/api/advance', json={
             'name': 'SSL',
             'date': '2026-08-09',
@@ -111,18 +102,16 @@ class AgriCommissionManagerTestCase(unittest.TestCase):
         })
         self.assertEqual(res.status_code, 200)
 
-        # Multi Advance
         res_multi = self.client.post('/api/add-multi-advance', json={
             'date': '2026-08-09',
             'advances': {
                 'AVR': 3000,
-                'BVS': 0, # Should skip 0 values
+                'BVS': 0,
                 'DPR': 1500
             }
         })
         self.assertEqual(res_multi.status_code, 200)
 
-        # Fetch advances
         res_list = self.client.get('/api/advances?date=2026-08-09')
         data_list = json.loads(res_list.data)
         self.assertTrue(data_list['success'])
@@ -132,7 +121,6 @@ class AgriCommissionManagerTestCase(unittest.TestCase):
         self.assertIn('DPR', names)
 
     def test_07_sold_data_crud(self):
-        # Add Sold Data
         payload = {
             'date': '2026-08-09',
             'name': 'Trader A',
@@ -150,14 +138,12 @@ class AgriCommissionManagerTestCase(unittest.TestCase):
         res = self.client.post('/api/sold-data', json=payload)
         self.assertEqual(res.status_code, 200)
 
-        # Read Sold Data
         res_get = self.client.get('/api/sold-data?date=2026-08-09')
         data_get = json.loads(res_get.data)
         self.assertTrue(data_get['success'])
         self.assertGreater(len(data_get['sold_data']), 0)
 
     def test_08_buyer_balance_report(self):
-        # Add Buyer Bill first
         res = self.client.post('/api/add-buyer-bill', json={
             'name': 'Super Buyer',
             'billdate': '2026-08-09',
@@ -166,7 +152,6 @@ class AgriCommissionManagerTestCase(unittest.TestCase):
         })
         self.assertEqual(res.status_code, 200)
 
-        # Get Buyer Balance Report
         res_bal = self.client.get('/api/buyer-balance?year=2026')
         data_bal = json.loads(res_bal.data)
         self.assertTrue(data_bal['success'])
@@ -178,6 +163,30 @@ class AgriCommissionManagerTestCase(unittest.TestCase):
         data = json.loads(res.data)
         self.assertTrue(data['success'])
         self.assertIn('sms_list', data)
+
+    def test_10_account_linking_google_oauth_and_email_password(self):
+        # Step A: Signup via Email/Password
+        signup_res = self.client.post('/api/signup', json={
+            'name': 'Supriya Garapati',
+            'email': 'garapatisupriya26@gmail.com',
+            'password': 'mypassword123'
+        })
+        signup_data = json.loads(signup_res.data)
+        self.assertEqual(signup_res.status_code, 201)
+        original_user_id = signup_data['user']['user_id']
+
+        # Step B: Sign in via Google OAuth using UPPERCASE/MixedCase email
+        google_res = self.client.post('/api/google-auth', json={
+            'name': 'Supriya Garapati',
+            'email': 'GarapatiSupriya26@gmail.com'
+        })
+        google_data = json.loads(google_res.data)
+        self.assertEqual(google_res.status_code, 200)
+
+        # Step C: VERIFY strictly unified user_id across sign-in methods!
+        linked_user_id = google_data['user']['user_id']
+        self.assertEqual(original_user_id, linked_user_id)
+        self.assertEqual(google_data['user']['email'], 'garapatisupriya26@gmail.com')
 
 if __name__ == '__main__':
     unittest.main()
