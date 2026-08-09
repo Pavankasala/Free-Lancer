@@ -14,154 +14,183 @@ export default function BalanceSheet({ user, onLogout }) {
   }
 
   const fetchBalanceSheet = async (e) => {
-    e.preventDefault();
+    if (e) e.preventDefault();
+
+    // Pull Buyer Bills from Buyers Details page storage
+    let buyerBills = [];
     try {
-      const res = await axios.get(`${API_BASE_URL}/api/balance-sheet?date=${selectedYear}-01-01`);
-      if (res.data && res.data.success) {
-        setData({
-          rows: [
-            { date: `${selectedYear}-08-08`, total: res.data.total_buy || 0.00, paid: res.data.total_cash || 0.00, pending: (res.data.total_buy || 0.00) - (res.data.total_cash || 0.00) }
-          ],
-          oldBalance: 0.00,
-          cashPaid: res.data.total_cash || 0.00,
-          newAmount: res.data.total_buy || 0.00,
-          presentBalance: (res.data.total_buy || 0.00) - (res.data.total_cash || 0.00)
-        });
-        setSearched(true);
-        return;
-      }
-    } catch (err) {}
+      const saved = localStorage.getItem('agri_local_buyer_bills');
+      buyerBills = saved ? JSON.parse(saved) : [];
+    } catch (err) {
+      buyerBills = [];
+    }
+
+    // Filter by selected year
+    const yearBills = buyerBills.filter(b => {
+      const bDate = b.date || b.billdate || '';
+      return bDate.startsWith(selectedYear);
+    });
+
+    const totalNewAmount = yearBills.reduce((acc, b) => acc + (Number(b.no_of_bags) * Number(b.price) || 0), 0);
+    const totalCashPaid = yearBills.reduce((acc, b) => acc + (b.paid === 'YES' ? (Number(b.no_of_bags) * Number(b.price)) : Number(b.advance || 0)), 0);
+    const presentBalance = totalNewAmount - totalCashPaid;
+
+    const rows = yearBills.map(b => {
+      const total = Number(b.no_of_bags) * Number(b.price) || 0;
+      const paid = b.paid === 'YES' ? total : Number(b.advance || 0);
+      return {
+        date: b.date || b.billdate || `${selectedYear}-01-01`,
+        buyerName: b.name || 'Buyer',
+        bags: b.no_of_bags,
+        total: total,
+        paid: paid,
+        pending: total - paid
+      };
+    });
+
+    // Fallback if empty
+    if (rows.length === 0) {
+      try {
+        const res = await axios.get(`${API_BASE_URL}/api/balance-sheet?date=${selectedYear}-01-01`);
+        if (res.data && res.data.success) {
+          const apiTotal = res.data.total_buy || 0.00;
+          const apiCash = res.data.total_cash || 0.00;
+          setData({
+            rows: [
+              { date: `${selectedYear}-08-08`, buyerName: 'Buyers Total', bags: 0, total: apiTotal, paid: apiCash, pending: apiTotal - apiCash }
+            ],
+            oldBalance: 0.00,
+            cashPaid: apiCash,
+            newAmount: apiTotal,
+            presentBalance: apiTotal - apiCash
+          });
+          setSearched(true);
+          return;
+        }
+      } catch (err) {}
+    }
+
     setData({
-      rows: [
-        { date: `${selectedYear}-08-08`, total: 0.00, paid: 0.00, pending: 0.00 }
+      rows: rows.length > 0 ? rows : [
+        { date: `${selectedYear}-01-01`, buyerName: 'No Buyer Bills', bags: 0, total: 0.00, paid: 0.00, pending: 0.00 }
       ],
       oldBalance: 0.00,
-      cashPaid: 0.00,
-      newAmount: 0.00,
-      presentBalance: 0.00
+      cashPaid: totalCashPaid,
+      newAmount: totalNewAmount,
+      presentBalance: presentBalance
     });
     setSearched(true);
   };
 
   return (
-    <div style={{ fontFamily: "'Times New Roman', Times, serif" }}>
+    <div style={{ fontFamily: "'Times New Roman', Times, serif", backgroundColor: '#f8fafc', minHeight: '100vh' }}>
       <Header user={user} onLogout={onLogout} />
-      <br />
-      
-      <form onSubmit={fetchBalanceSheet}>
-        <table className="tab" width="30%" align="left" style={{ marginLeft: '10px' }}>
-          <tbody>
-            <tr>
-              <th style={{ backgroundColor: '#4286f4', color: 'white', padding: '6px' }}>Balance Sheet</th>
-            </tr>
-            <tr>
-              <td>
-                Select Year{' '}
-                <select value={selectedYear} onChange={(e) => setSelectedYear(e.target.value)}>
-                  {years.map(y => (
-                    <option key={y} value={y}>{y}</option>
-                  ))}
-                </select>
-              </td>
-            </tr>
-            <tr>
-              <td>
-                <input type="submit" value="Get Balance Sheet" />
-              </td>
-            </tr>
-          </tbody>
-        </table>
-      </form>
-      <div style={{ clear: 'both' }}><br /></div>
 
-      {searched && data && (
-        <table width="100%">
-          <tbody>
-            <tr>
-              {/* Div Balance Sheet Print Table (40% width) */}
-              <td width="40%" valign="top">
-                <div id="divBalSheetPrint">
-                  <table className="tab" width="100%" border="1" style={{ borderCollapse: 'collapse' }}>
-                    <thead>
-                      <tr style={{ backgroundColor: '#4CAF50', color: 'white' }}>
-                        <th align="left">Date</th>
-                        <th align="right">Total Amount</th>
-                        <th align="right">Cash Paid</th>
-                        <th align="right">Pending Balance</th>
+      <div style={{ padding: '16px', maxWidth: '1200px', margin: '0 auto' }}>
+        {/* Form Card */}
+        <div style={{ maxWidth: '420px', margin: '0 auto 20px auto', backgroundColor: '#ffffff', borderRadius: '10px', boxShadow: '0 2px 8px rgba(0,0,0,0.08)', border: '1px solid #cbd5e1', overflow: 'hidden' }}>
+          <div style={{ backgroundColor: '#4286f4', color: 'white', padding: '10px 16px', textAlign: 'center', fontWeight: 'bold', fontSize: '18px' }}>
+            Buyers Balance Sheet
+          </div>
+
+          <form onSubmit={fetchBalanceSheet} style={{ padding: '16px' }}>
+            <div style={{ marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <label style={{ width: '100px', fontWeight: 'bold', fontSize: '14px' }}>Select Year:</label>
+              <select
+                value={selectedYear}
+                onChange={(e) => setSelectedYear(e.target.value)}
+                style={{ border: '1px solid #cbd5e1', padding: '6px', borderRadius: '4px', flex: '1' }}
+              >
+                {years.map(y => (
+                  <option key={y} value={y}>{y}</option>
+                ))}
+              </select>
+            </div>
+
+            <button
+              type="submit"
+              style={{ width: '100%', padding: '10px', backgroundColor: '#2563eb', color: 'white', border: 'none', borderRadius: '6px', fontSize: '15px', fontWeight: 'bold', cursor: 'pointer' }}
+            >
+              Get Buyers Balance Sheet
+            </button>
+          </form>
+        </div>
+
+        {/* Results Container */}
+        {searched && data && (
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '20px', alignItems: 'flex-start' }}>
+            {/* Table Card (60% width) */}
+            <div style={{ flex: '1 1 500px', backgroundColor: '#ffffff', borderRadius: '10px', padding: '16px', boxShadow: '0 2px 8px rgba(0,0,0,0.08)', border: '1px solid #8ce86a' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', flexWrap: 'wrap', gap: '8px' }}>
+                <h2 style={{ color: '#15803d', margin: 0, fontSize: '1.3rem', fontWeight: 'bold' }}>
+                  - Buyers Balance Sheet ({selectedYear}) -
+                </h2>
+                <button
+                  type="button"
+                  onClick={() => window.print()}
+                  style={{ backgroundColor: '#16a34a', color: 'white', border: 'none', borderRadius: '6px', padding: '6px 14px', fontWeight: 'bold', cursor: 'pointer' }}
+                >
+                  🖨️ Print
+                </button>
+              </div>
+
+              <div style={{ overflowX: 'auto' }}>
+                <table width="100%" style={{ borderCollapse: 'collapse', minWidth: '550px' }}>
+                  <thead>
+                    <tr style={{ backgroundColor: '#15803d', color: 'white' }}>
+                      <th style={{ padding: '8px', textAlign: 'left' }}>Date</th>
+                      <th style={{ padding: '8px', textAlign: 'left' }}>Buyer Name</th>
+                      <th style={{ padding: '8px', textAlign: 'right' }}>Total Amount</th>
+                      <th style={{ padding: '8px', textAlign: 'right' }}>Cash Paid</th>
+                      <th style={{ padding: '8px', textAlign: 'right' }}>Pending Balance</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {data.rows.map((r, idx) => (
+                      <tr key={idx} style={{ borderBottom: '1px solid #e2e8f0', backgroundColor: idx % 2 === 0 ? '#ffffff' : '#f8fafc' }}>
+                        <td style={{ padding: '8px' }}>{r.date}</td>
+                        <td style={{ padding: '8px', fontWeight: 'bold', color: '#0f172a' }}>{r.buyerName}</td>
+                        <td style={{ padding: '8px', textAlign: 'right' }}>₹{r.total.toFixed(2)}</td>
+                        <td style={{ padding: '8px', textAlign: 'right' }}>₹{r.paid.toFixed(2)}</td>
+                        <td style={{ padding: '8px', textAlign: 'right', color: r.pending > 0 ? '#dc2626' : '#16a34a', fontWeight: 'bold' }}>₹{r.pending.toFixed(2)}</td>
                       </tr>
-                    </thead>
-                    <tbody>
-                      {data.rows.map((r, idx) => (
-                        <tr key={idx}>
-                          <td align="left">{r.date}</td>
-                          <td align="right">{r.total.toFixed(2)}</td>
-                          <td align="right">{r.paid.toFixed(2)}</td>
-                          <td align="right">{r.pending.toFixed(2)}</td>
-                        </tr>
-                      ))}
-                      <tr><td colSpan="4"><hr /></td></tr>
-                      <tr>
-                        <td>&nbsp;</td>
-                        <td align="right"><b>{data.newAmount.toFixed(2)}</b></td>
-                        <td align="right"><b>{data.cashPaid.toFixed(2)}</b></td>
-                        <td align="right"><b>{data.presentBalance.toFixed(2)}</b></td>
-                      </tr>
-                      <tr>
-                        <td colSpan="3" align="left">
-                          Balance Sheet for the year: <font color="blue"><b>{selectedYear}</b></font>
-                        </td>
-                        <td align="right">
-                          <input type="button" value="Print" onClick={() => window.print()} />
-                        </td>
-                      </tr>
-                    </tbody>
-                  </table>
-                </div>
-              </td>
-
-              {/* Old Balance Box (15%) */}
-              <td width="15%" valign="top">
-                <table className="tab" width="100%">
-                  <tbody>
-                    <tr><th style={{ backgroundColor: '#4286f4', color: 'white' }}>Old Balance</th></tr>
-                    <tr><td align="center"><b>{data.oldBalance.toFixed(2)}</b></td></tr>
+                    ))}
+                    <tr style={{ backgroundColor: '#f8fafc', fontWeight: 'bold', borderTop: '2px solid #cbd5e1' }}>
+                      <td colSpan="2" align="left" style={{ padding: '10px' }}>Total:</td>
+                      <td align="right" style={{ padding: '10px' }}>₹{data.newAmount.toFixed(2)}</td>
+                      <td align="right" style={{ padding: '10px' }}>₹{data.cashPaid.toFixed(2)}</td>
+                      <td align="right" style={{ padding: '10px', color: '#dc2626' }}>₹{data.presentBalance.toFixed(2)}</td>
+                    </tr>
                   </tbody>
                 </table>
-              </td>
+              </div>
+            </div>
 
-              {/* Cash Paid Box (15%) */}
-              <td width="15%" valign="top">
-                <table className="tab" width="100%">
-                  <tbody>
-                    <tr><th style={{ backgroundColor: '#4286f4', color: 'white' }}>Cash Paid</th></tr>
-                    <tr><td align="center"><b>{data.cashPaid.toFixed(2)}</b></td></tr>
-                  </tbody>
-                </table>
-              </td>
+            {/* Summary Cards (40% width) */}
+            <div style={{ flex: '1 1 300px', display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: '12px' }}>
+              <div style={{ backgroundColor: '#ffffff', borderRadius: '10px', padding: '16px', border: '1px solid #cbd5e1', boxShadow: '0 2px 8px rgba(0,0,0,0.06)', textAlign: 'center' }}>
+                <div style={{ color: '#4286f4', fontWeight: 'bold', fontSize: '14px', marginBottom: '6px' }}>Old Balance</div>
+                <div style={{ fontSize: '1.3rem', fontWeight: 'bold', color: '#1e293b' }}>₹{data.oldBalance.toFixed(2)}</div>
+              </div>
 
-              {/* New Amount Box (15%) */}
-              <td width="15%" valign="top">
-                <table className="tab" width="100%">
-                  <tbody>
-                    <tr><th style={{ backgroundColor: '#4286f4', color: 'white' }}>New Amount</th></tr>
-                    <tr><td align="center"><b>{data.newAmount.toFixed(2)}</b></td></tr>
-                  </tbody>
-                </table>
-              </td>
+              <div style={{ backgroundColor: '#ffffff', borderRadius: '10px', padding: '16px', border: '1px solid #cbd5e1', boxShadow: '0 2px 8px rgba(0,0,0,0.06)', textAlign: 'center' }}>
+                <div style={{ color: '#16a34a', fontWeight: 'bold', fontSize: '14px', marginBottom: '6px' }}>Cash Paid</div>
+                <div style={{ fontSize: '1.3rem', fontWeight: 'bold', color: '#16a34a' }}>₹{data.cashPaid.toFixed(2)}</div>
+              </div>
 
-              {/* Present Balance Box (15%) */}
-              <td width="15%" valign="top">
-                <table className="tab" width="100%">
-                  <tbody>
-                    <tr><th style={{ backgroundColor: '#4286f4', color: 'white' }}>Present Balance</th></tr>
-                    <tr><td align="center"><b>{data.presentBalance.toFixed(2)}</b></td></tr>
-                  </tbody>
-                </table>
-              </td>
-            </tr>
-          </tbody>
-        </table>
-      )}
+              <div style={{ backgroundColor: '#ffffff', borderRadius: '10px', padding: '16px', border: '1px solid #cbd5e1', boxShadow: '0 2px 8px rgba(0,0,0,0.06)', textAlign: 'center' }}>
+                <div style={{ color: '#2563eb', fontWeight: 'bold', fontSize: '14px', marginBottom: '6px' }}>New Amount</div>
+                <div style={{ fontSize: '1.3rem', fontWeight: 'bold', color: '#2563eb' }}>₹{data.newAmount.toFixed(2)}</div>
+              </div>
+
+              <div style={{ backgroundColor: '#ffffff', borderRadius: '10px', padding: '16px', border: '1px solid #cbd5e1', boxShadow: '0 2px 8px rgba(0,0,0,0.06)', textAlign: 'center' }}>
+                <div style={{ color: '#dc2626', fontWeight: 'bold', fontSize: '14px', marginBottom: '6px' }}>Present Balance</div>
+                <div style={{ fontSize: '1.3rem', fontWeight: 'bold', color: '#dc2626' }}>₹{data.presentBalance.toFixed(2)}</div>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
     </div>
   );
 }

@@ -147,8 +147,8 @@ def update_profile():
 
     name = data.get('name') or data.get('owner_name') or 'Operator'
     company_full_name = data.get('company_full_name') or data.get('business_name') or 'Agri Commission Manager'
-    mobile = data.get('mobile') or data.get('phone') or '9866123445'
-    address = data.get('address') or 'MAINROAD, NAKREKAL'
+    mobile = data.get('mobile') or data.get('phone') or ''
+    address = data.get('address') or ''
     default_hamali = float(data.get('default_hamali', 0.0) or 0.0)
 
     conn = db.get_db()

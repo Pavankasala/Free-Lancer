@@ -41,83 +41,101 @@ export default function NotPaidBills({ user, onLogout }) {
   const netTotalSum = bills.reduce((acc, b) => acc + (b.no_of_bags * b.price), 0);
 
   return (
-    <div style={{ fontFamily: "'Times New Roman', Times, serif" }}>
+    <div style={{ fontFamily: "'Times New Roman', Times, serif", backgroundColor: '#f8fafc', minHeight: '100vh' }}>
       <Header user={user} onLogout={onLogout} />
-      <br />
-      
-      <form onSubmit={handleGetBills}>
-        <table className="tab" width="30%" align="center">
-          <tbody>
-            <tr>
-              <th colSpan="2" style={{ backgroundColor: '#4286f4', color: 'white', padding: '6px' }}>Not Paid Bills</th>
-            </tr>
-            <tr>
-              <td>Select Year</td>
-              <td>
-                <select value={selectedYear} onChange={(e) => setSelectedYear(e.target.value)}>
-                  {years.map(y => (
-                    <option key={y} value={y}>{y}</option>
-                  ))}
-                </select>
-              </td>
-            </tr>
-            <tr>
-              <td>&nbsp;</td>
-              <td>
-                <input type="submit" id="getNotPaidBills" name="getNotPaidBills" value="Get Bills" />
-              </td>
-            </tr>
-          </tbody>
-        </table>
-      </form>
 
-      <br />
-      {searched && (
-        <div style={{ padding: '0 10px' }}>
-          <div style={{ textAlign: 'right', marginBottom: '5px' }}>
-            <input type="button" value="Print Unpaid Bills" onClick={() => window.print()} />
+      <div style={{ padding: '16px', maxWidth: '1200px', margin: '0 auto' }}>
+        {/* Form Card */}
+        <div style={{ maxWidth: '420px', margin: '0 auto 20px auto', backgroundColor: '#ffffff', borderRadius: '10px', boxShadow: '0 2px 8px rgba(0,0,0,0.08)', border: '1px solid #cbd5e1', overflow: 'hidden' }}>
+          <div style={{ backgroundColor: '#4286f4', color: 'white', padding: '10px 16px', textAlign: 'center', fontWeight: 'bold', fontSize: '18px' }}>
+            Not Paid Bills
           </div>
-          <table width="100%" className="tab" border="1" style={{ borderCollapse: 'collapse' }}>
-            <thead>
-              <tr style={{ backgroundColor: '#4CAF50', color: 'white' }}>
-                <th align="left">S.No.</th>
-                <th align="left">Kisan Name</th>
-                <th align="left">No.of bags</th>
-                <th align="left">Price</th>
-                <th align="left">Total</th>
-                <th align="left">Net Total</th>
-                <th align="left">Date</th>
-              </tr>
-            </thead>
-            <tbody>
-              {bills.length === 0 ? (
-                <tr><td colSpan="7">No Unpaid Bills for Year {selectedYear}</td></tr>
-              ) : (
-                bills.map((b, idx) => {
-                  const total = b.no_of_bags * b.price;
-                  return (
-                    <tr key={b.id}>
-                      <td align="left">{idx + 1}</td>
-                      <td align="left">{b.name}</td>
-                      <td align="left">{b.no_of_bags}</td>
-                      <td align="left">{b.price}</td>
-                      <td align="left">{total.toFixed(2)}</td>
-                      <td align="left"><b>{total.toFixed(2)}</b></td>
-                      <td align="left">{b.date}</td>
-                    </tr>
-                  );
-                })
-              )}
-              {bills.length > 0 && (
-                <tr style={{ backgroundColor: '#f2f2f2' }}>
-                  <td colSpan="5" align="right"><b>Total Net Balance Unpaid:</b></td>
-                  <td align="left" colSpan="2"><font color="red"><b>₹ {netTotalSum.toFixed(2)}</b></font></td>
-                </tr>
-              )}
-            </tbody>
-          </table>
+
+          <form onSubmit={handleGetBills} style={{ padding: '16px' }}>
+            <div style={{ marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <label style={{ width: '100px', fontWeight: 'bold', fontSize: '14px' }}>Select Year:</label>
+              <select
+                value={selectedYear}
+                onChange={(e) => setSelectedYear(e.target.value)}
+                style={{ border: '1px solid #cbd5e1', padding: '6px', borderRadius: '4px', flex: '1' }}
+              >
+                {years.map(y => (
+                  <option key={y} value={y}>{y}</option>
+                ))}
+              </select>
+            </div>
+
+            <button
+              type="submit"
+              style={{ width: '100%', padding: '10px', backgroundColor: '#2563eb', color: 'white', border: 'none', borderRadius: '6px', fontSize: '15px', fontWeight: 'bold', cursor: 'pointer' }}
+            >
+              Get Unpaid Bills
+            </button>
+          </form>
         </div>
-      )}
+
+        {/* Unpaid Bills Table Card */}
+        {searched && (
+          <div style={{ backgroundColor: '#ffffff', borderRadius: '10px', padding: '16px', boxShadow: '0 2px 8px rgba(0,0,0,0.08)', border: '1px solid #8ce86a' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', flexWrap: 'wrap', gap: '8px' }}>
+              <h2 style={{ color: '#15803d', margin: 0, fontSize: '1.3rem', fontWeight: 'bold' }}>
+                - Unpaid Bills ({selectedYear}) -
+              </h2>
+              <button
+                type="button"
+                onClick={() => window.print()}
+                style={{ backgroundColor: '#16a34a', color: 'white', border: 'none', borderRadius: '6px', padding: '6px 14px', fontWeight: 'bold', cursor: 'pointer' }}
+              >
+                🖨️ Print Unpaid Bills
+              </button>
+            </div>
+
+            <div style={{ overflowX: 'auto' }}>
+              <table width="100%" style={{ borderCollapse: 'collapse', minWidth: '600px' }}>
+                <thead>
+                  <tr style={{ backgroundColor: '#15803d', color: 'white' }}>
+                    <th style={{ padding: '8px', textAlign: 'left' }}>S.No.</th>
+                    <th style={{ padding: '8px', textAlign: 'left' }}>Kisan Name</th>
+                    <th style={{ padding: '8px', textAlign: 'center' }}>Bags</th>
+                    <th style={{ padding: '8px', textAlign: 'center' }}>Price</th>
+                    <th style={{ padding: '8px', textAlign: 'right' }}>Total (₹)</th>
+                    <th style={{ padding: '8px', textAlign: 'right' }}>Net Total (₹)</th>
+                    <th style={{ padding: '8px', textAlign: 'center' }}>Date</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {bills.length === 0 ? (
+                    <tr><td colSpan="7" align="center" style={{ padding: '16px', color: '#dc2626', fontWeight: 'bold' }}>No Unpaid Bills Found for Year {selectedYear}</td></tr>
+                  ) : (
+                    bills.map((b, idx) => {
+                      const total = b.no_of_bags * b.price;
+                      return (
+                        <tr key={b.id || idx} style={{ borderBottom: '1px solid #e2e8f0', backgroundColor: idx % 2 === 0 ? '#ffffff' : '#f8fafc' }}>
+                          <td style={{ padding: '8px' }}>{idx + 1}</td>
+                          <td style={{ padding: '8px', fontWeight: 'bold', color: '#0f172a' }}>{b.name}</td>
+                          <td style={{ padding: '8px', textAlign: 'center' }}>{b.no_of_bags}</td>
+                          <td style={{ padding: '8px', textAlign: 'center' }}>₹{b.price}</td>
+                          <td style={{ padding: '8px', textAlign: 'right' }}>₹{total.toFixed(2)}</td>
+                          <td style={{ padding: '8px', textAlign: 'right', fontWeight: 'bold', color: '#dc2626' }}>₹{total.toFixed(2)}</td>
+                          <td style={{ padding: '8px', textAlign: 'center' }}>{b.date}</td>
+                        </tr>
+                      );
+                    })
+                  )}
+                  {bills.length > 0 && (
+                    <tr style={{ backgroundColor: '#f8fafc', fontWeight: 'bold' }}>
+                      <td colSpan="5" align="right" style={{ padding: '10px' }}>Total Net Balance Unpaid:</td>
+                      <td align="right" colSpan="2" style={{ padding: '10px', color: '#dc2626', fontSize: '1.1rem' }}>
+                        ₹{netTotalSum.toFixed(2)}
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+      </div>
     </div>
   );
 }

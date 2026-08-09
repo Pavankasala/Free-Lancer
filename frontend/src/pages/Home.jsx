@@ -35,7 +35,8 @@ export default function Home({ user, onLogout, onUpdateUser }) {
   const getLocalBills = () => {
     try {
       const saved = localStorage.getItem('agri_local_bills');
-      return saved ? JSON.parse(saved) : [];
+      const parsed = saved ? JSON.parse(saved) : [];
+      return parsed.filter(b => b.type !== 'BUYER');
     } catch (e) {
       return [];
     }
@@ -98,14 +99,66 @@ export default function Home({ user, onLogout, onUpdateUser }) {
     setChannels(updated);
   };
 
+  const [editingBillId, setEditingBillId] = useState(null);
+
+  const saveOrUpdateLocalBill = (billObj) => {
+    try {
+      const current = getLocalBills();
+      const exists = current.some(b => b.id === billObj.id);
+      let updated;
+      if (exists) {
+        updated = current.map(b => b.id === billObj.id ? { ...b, ...billObj } : b);
+      } else {
+        updated = [billObj, ...current];
+      }
+      localStorage.setItem('agri_local_bills', JSON.stringify(updated));
+    } catch (e) {}
+  };
+
+  const handleEditClick = (b) => {
+    setEditingBillId(b.id);
+    setName(b.name || '');
+    setBilldate(b.date || b.billdate || billdate);
+    if (b.channels && b.channels.length > 0) {
+      setChannels(b.channels);
+    } else {
+      setChannels([{ bags: b.no_of_bags || '', price: b.price || '' }]);
+    }
+    setHamali(b.hamali || 0);
+    setAdvance(b.advance || '');
+    setBagsSold(b.bagsSold || '');
+    setPriceSold(b.priceSold || '');
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  const handleCancelEdit = () => {
+    setEditingBillId(null);
+    setName('');
+    setChannels([{ bags: '', price: '' }]);
+    setAdvance('');
+    setBagsSold('');
+    setPriceSold('');
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
+
+    for (const c of channels) {
+      if (Number(c.bags) < 0 || Number(c.price) < 0) {
+        alert("Invalid input! Bags and Price cannot be negative numbers.");
+        return;
+      }
+    }
+    if (Number(advance) < 0 || Number(hamali) < 0 || Number(bagsSold) < 0 || Number(priceSold) < 0) {
+      alert("Invalid input! Negative values are not allowed.");
+      return;
+    }
 
     const totalBags = channels.reduce((acc, c) => acc + (Number(c.bags) || 0), 0);
     const avgPrice = channels.length > 0 && Number(channels[0].price) ? Number(channels[0].price) : (Number(priceSold) || 0);
 
-    const newBillObj = {
-      id: Date.now(),
+    const billObj = {
+      id: editingBillId || Date.now(),
       name: name || 'Kisan',
       billdate: billdate,
       date: billdate,
@@ -135,18 +188,19 @@ export default function Home({ user, onLogout, onUpdateUser }) {
       });
       if (res.data && res.data.success) {
         if (res.data.bill) {
-          saveLocalBill(res.data.bill);
+          saveOrUpdateLocalBill({ ...res.data.bill, ...billObj });
         } else {
-          saveLocalBill(newBillObj);
+          saveOrUpdateLocalBill(billObj);
         }
       } else {
-        saveLocalBill(newBillObj);
+        saveOrUpdateLocalBill(billObj);
       }
     } catch (err) {
-      saveLocalBill(newBillObj);
+      saveOrUpdateLocalBill(billObj);
     }
 
-    alert('saved successfully');
+    alert(editingBillId ? 'Updated successfully' : 'saved successfully');
+    setEditingBillId(null);
     setName('');
     setChannels([{ bags: '', price: '' }]);
     setAdvance('');
@@ -169,7 +223,7 @@ export default function Home({ user, onLogout, onUpdateUser }) {
           {/* Add Bill Form Card */}
           <div style={{ flex: '1 1 340px', minWidth: '280px', backgroundColor: '#ffffff', borderRadius: '10px', boxShadow: '0 2px 8px rgba(0,0,0,0.08)', border: '1px solid #cbd5e1', overflow: 'hidden' }}>
             <div style={{ backgroundColor: '#4286f4', color: 'white', padding: '10px 16px', textAlign: 'center', fontWeight: 'bold', fontSize: '18px' }}>
-              Add Bill
+              Kisan Bills
             </div>
             
             <form onSubmit={handleSubmit} style={{ padding: '16px' }}>
@@ -198,7 +252,7 @@ export default function Home({ user, onLogout, onUpdateUser }) {
 
               <div style={{ marginBottom: '8px' }}>
                 <a href="#addChannel" onClick={addChannel} style={{ color: '#2563eb', textDecoration: 'underline', fontWeight: 'bold', fontSize: '14px' }}>
-                  + Click to add a Channel
+                  Click to add a Channel
                 </a>
               </div>
 
@@ -267,22 +321,42 @@ export default function Home({ user, onLogout, onUpdateUser }) {
                 />
               </div>
 
-              <button
-                type="submit"
-                style={{
-                  width: '100%',
-                  padding: '10px',
-                  backgroundColor: '#16a34a',
-                  color: 'white',
-                  border: 'none',
-                  borderRadius: '6px',
-                  fontSize: '16px',
-                  fontWeight: 'bold',
-                  cursor: 'pointer'
-                }}
-              >
-                Submit Bill
-              </button>
+              <div style={{ display: 'flex', gap: '8px' }}>
+                <button
+                  type="submit"
+                  style={{
+                    flex: '1',
+                    padding: '10px',
+                    backgroundColor: editingBillId ? '#eab308' : '#16a34a',
+                    color: 'white',
+                    border: 'none',
+                    borderRadius: '6px',
+                    fontSize: '16px',
+                    fontWeight: 'bold',
+                    cursor: 'pointer'
+                  }}
+                >
+                  {editingBillId ? 'Update Bill' : 'Submit Bill'}
+                </button>
+                {editingBillId && (
+                  <button
+                    type="button"
+                    onClick={handleCancelEdit}
+                    style={{
+                      padding: '10px 16px',
+                      backgroundColor: '#64748b',
+                      color: 'white',
+                      border: 'none',
+                      borderRadius: '6px',
+                      fontSize: '15px',
+                      fontWeight: 'bold',
+                      cursor: 'pointer'
+                    }}
+                  >
+                    Cancel
+                  </button>
+                )}
+              </div>
             </form>
           </div>
 
@@ -387,6 +461,13 @@ export default function Home({ user, onLogout, onUpdateUser }) {
                             style={{ backgroundColor: '#2563eb', color: '#ffffff', border: 'none', borderRadius: '4px', padding: '4px 8px', cursor: 'pointer', fontSize: '12px', fontWeight: 'bold' }}
                           >
                             View
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleEditClick(b)}
+                            style={{ backgroundColor: '#eab308', color: '#ffffff', border: 'none', borderRadius: '4px', padding: '4px 8px', cursor: 'pointer', fontSize: '12px', fontWeight: 'bold' }}
+                          >
+                            Edit
                           </button>
                           <button
                             type="button"

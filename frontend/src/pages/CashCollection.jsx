@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import Header from '../components/Header';
 import { API_BASE_URL } from '../api/config';
@@ -35,6 +35,10 @@ export default function CashCollection({ user, onLogout }) {
 
   const handleAddSubmit = async (e) => {
     e.preventDefault();
+    if (Number(amount) < 0) {
+      alert("Invalid input! Cash collection amount cannot be negative.");
+      return;
+    }
     const newItem = { id: Date.now(), date: cbilldate, amount: Number(amount) || 0, given_by: cname };
     try {
       const res = await axios.post(`${API_BASE_URL}/api/cash-collection`, {
@@ -53,6 +57,7 @@ export default function CashCollection({ user, onLogout }) {
     alert('saved successfully');
     setAmount('');
     setCname('');
+    fetchSingleDate();
   };
 
   const fetchSingleDate = async () => {
@@ -85,159 +90,185 @@ export default function CashCollection({ user, onLogout }) {
     setRangeSearched(true);
   };
 
+  useEffect(() => {
+    fetchSingleDate();
+  }, []);
+
   return (
-    <div style={{ fontFamily: "'Times New Roman', Times, serif" }}>
+    <div style={{ fontFamily: "'Times New Roman', Times, serif", backgroundColor: '#f8fafc', minHeight: '100vh' }}>
       <Header user={user} onLogout={onLogout} />
-      <br />
-      <table width="100%">
-        <tbody>
-          <tr>
-            {/* Table 1: Add Cash Collection */}
-            <td valign="top" width="20%">
-              <form onSubmit={handleAddSubmit}>
-                <table className="tab" width="100%">
-                  <tbody>
-                    <tr>
-                      <th align="center" colSpan="2" style={{ backgroundColor: '#4286f4', color: 'white', padding: '6px' }}>Add Cash Collection</th>
-                    </tr>
-                    <tr>
-                      <td align="left" style={{ padding: '6px 8px', fontWeight: 'bold' }}>Date</td>
-                      <td>
-                        <input type="date" value={cbilldate} onChange={(e) => setCbilldate(e.target.value)} required />
-                      </td>
-                    </tr>
-                    <tr>
-                      <td align="left" style={{ padding: '6px 8px', fontWeight: 'bold' }}>Amount</td>
-                      <td>
-                        <input type="number" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="Amount" required />
-                      </td>
-                    </tr>
-                    <tr>
-                      <td align="left" style={{ padding: '6px 8px', fontWeight: 'bold' }}>Name</td>
-                      <td>
-                        <input type="text" value={cname} onChange={(e) => setCname(e.target.value)} placeholder="Name" required />
-                      </td>
-                    </tr>
-                    <tr>
-                      <td></td>
-                      <td>
-                        <input type="submit" value="Submit" />
-                      </td>
-                    </tr>
-                  </tbody>
-                </table>
-              </form>
-            </td>
 
-            {/* Table 2: List Cash Collection by single date */}
-            <td valign="top" width="30%">
-              <table className="tab" width="100%">
-                <tbody>
-                  <tr>
-                    <th colSpan="3" align="center" style={{ backgroundColor: '#4286f4', color: 'white', padding: '6px' }}>List Cash Collection</th>
-                  </tr>
-                  <tr>
-                    <td align="left" style={{ padding: '6px 8px', fontWeight: 'bold' }}>Date</td>
-                    <td>
-                      <input type="date" value={singleDate} onChange={(e) => setSingleDate(e.target.value)} required />
-                    </td>
-                    <td>
-                      <input type="button" value="Cash Collections" onClick={fetchSingleDate} />
-                    </td>
-                  </tr>
-                  {singleSearched && (
-                    <tr>
-                      <td colSpan="3">
-                        <table width="100%" border="1" style={{ borderCollapse: 'collapse', marginTop: '10px' }}>
-                          <thead>
-                            <tr style={{ backgroundColor: '#4CAF50', color: 'white' }}>
-                              <th>S.No.</th>
-                              <th>Given By</th>
-                              <th>Amount</th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {singleList.length === 0 ? (
-                              <tr><td colSpan="3">No collections found</td></tr>
-                            ) : (
-                              singleList.map((item, idx) => (
-                                <tr key={item.id}>
-                                  <td>{idx + 1}</td>
-                                  <td>{item.given_by}</td>
-                                  <td><b>{item.amount.toFixed(2)}</b></td>
-                                </tr>
-                              ))
-                            )}
-                          </tbody>
-                        </table>
-                      </td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
-            </td>
+      <div style={{ padding: '16px', maxWidth: '1200px', margin: '0 auto' }}>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '20px', alignItems: 'flex-start' }}>
+          
+          {/* Card 1: Add Cash Collection */}
+          <div style={{ flex: '1 1 300px', backgroundColor: '#ffffff', borderRadius: '10px', boxShadow: '0 2px 8px rgba(0,0,0,0.08)', border: '1px solid #cbd5e1', overflow: 'hidden' }}>
+            <div style={{ backgroundColor: '#4286f4', color: 'white', padding: '10px 16px', textAlign: 'center', fontWeight: 'bold', fontSize: '18px' }}>
+              Add Cash Collection
+            </div>
 
-            {/* Table 3: List Complete Cash Collections Range */}
-            <td valign="top" width="40%">
-              <table className="tab" width="100%">
-                <tbody>
-                  <tr>
-                    <th colSpan="2" align="center" style={{ backgroundColor: '#4286f4', color: 'white', padding: '6px' }}>List Complete Cash Collections</th>
-                  </tr>
-                  <tr>
-                    <td>From</td>
-                    <td>
-                      <input type="date" value={fromDate} onChange={(e) => setFromDate(e.target.value)} required />
-                    </td>
-                  </tr>
-                  <tr>
-                    <td>To</td>
-                    <td>
-                      <input type="date" value={toDate} onChange={(e) => setToDate(e.target.value)} required />
-                    </td>
-                  </tr>
-                  <tr>
-                    <td>&nbsp;</td>
-                    <td>
-                      <input type="button" value="Get Cash Collections" onClick={fetchRangeDate} />
-                    </td>
-                  </tr>
-                  {rangeSearched && (
-                    <tr>
-                      <td colSpan="2">
-                        <table width="100%" border="1" style={{ borderCollapse: 'collapse', marginTop: '10px' }}>
-                          <thead>
-                            <tr style={{ backgroundColor: '#4CAF50', color: 'white' }}>
-                              <th>S.No.</th>
-                              <th>Date</th>
-                              <th>Given By</th>
-                              <th>Amount</th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {rangeList.length === 0 ? (
-                              <tr><td colSpan="4">No range collections found</td></tr>
-                            ) : (
-                              rangeList.map((item, idx) => (
-                                <tr key={item.id}>
-                                  <td>{idx + 1}</td>
-                                  <td>{item.date}</td>
-                                  <td>{item.given_by}</td>
-                                  <td><b>{item.amount.toFixed(2)}</b></td>
-                                </tr>
-                              ))
-                            )}
-                          </tbody>
-                        </table>
-                      </td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
-            </td>
-          </tr>
-        </tbody>
-      </table>
+            <form onSubmit={handleAddSubmit} style={{ padding: '16px' }}>
+              <div style={{ marginBottom: '12px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <label style={{ width: '80px', fontWeight: 'bold', fontSize: '14px' }}>Date:</label>
+                <input
+                  type="date"
+                  value={cbilldate}
+                  onChange={(e) => setCbilldate(e.target.value)}
+                  required
+                  style={{ border: '1px solid #cbd5e1', padding: '6px', borderRadius: '4px', flex: '1' }}
+                />
+              </div>
+
+              <div style={{ marginBottom: '12px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <label style={{ width: '80px', fontWeight: 'bold', fontSize: '14px' }}>Amount:</label>
+                <input
+                  type="number"
+                  value={amount}
+                  onChange={(e) => setAmount(e.target.value)}
+                  placeholder="Amount"
+                  required
+                  style={{ border: '1px solid #cbd5e1', padding: '6px', borderRadius: '4px', flex: '1' }}
+                />
+              </div>
+
+              <div style={{ marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <label style={{ width: '80px', fontWeight: 'bold', fontSize: '14px' }}>Given By:</label>
+                <input
+                  type="text"
+                  value={cname}
+                  onChange={(e) => setCname(e.target.value)}
+                  placeholder="Name"
+                  required
+                  style={{ border: '1px solid #cbd5e1', padding: '6px', borderRadius: '4px', flex: '1' }}
+                />
+              </div>
+
+              <button
+                type="submit"
+                style={{ width: '100%', padding: '10px', backgroundColor: '#16a34a', color: 'white', border: 'none', borderRadius: '6px', fontSize: '15px', fontWeight: 'bold', cursor: 'pointer' }}
+              >
+                Submit Cash Collection
+              </button>
+            </form>
+          </div>
+
+          {/* Card 2: List Cash Collection By Single Date */}
+          <div style={{ flex: '1 1 340px', backgroundColor: '#ffffff', borderRadius: '10px', boxShadow: '0 2px 8px rgba(0,0,0,0.08)', border: '1px solid #cbd5e1', overflow: 'hidden' }}>
+            <div style={{ backgroundColor: '#4286f4', color: 'white', padding: '10px 16px', textAlign: 'center', fontWeight: 'bold', fontSize: '18px' }}>
+              List Cash Collection By Date
+            </div>
+
+            <div style={{ padding: '16px' }}>
+              <div style={{ display: 'flex', gap: '8px', marginBottom: '12px', flexWrap: 'wrap' }}>
+                <input
+                  type="date"
+                  value={singleDate}
+                  onChange={(e) => setSingleDate(e.target.value)}
+                  required
+                  style={{ border: '1px solid #cbd5e1', padding: '6px', borderRadius: '4px', flex: '1' }}
+                />
+                <button
+                  type="button"
+                  onClick={fetchSingleDate}
+                  style={{ backgroundColor: '#2563eb', color: 'white', border: 'none', borderRadius: '4px', padding: '6px 12px', fontWeight: 'bold', cursor: 'pointer' }}
+                >
+                  Cash Collections
+                </button>
+              </div>
+
+              {singleSearched && (
+                <div style={{ overflowX: 'auto', marginTop: '10px' }}>
+                  <table width="100%" style={{ borderCollapse: 'collapse', border: '1px solid #cbd5e1' }}>
+                    <thead>
+                      <tr style={{ backgroundColor: '#15803d', color: 'white' }}>
+                        <th style={{ padding: '6px', textAlign: 'left' }}>S.No.</th>
+                        <th style={{ padding: '6px', textAlign: 'left' }}>Given By</th>
+                        <th style={{ padding: '6px', textAlign: 'right' }}>Amount (₹)</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {singleList.length === 0 ? (
+                        <tr><td colSpan="3" align="center" style={{ padding: '10px', color: '#dc2626' }}>No collections found</td></tr>
+                      ) : (
+                        singleList.map((item, idx) => (
+                          <tr key={item.id || idx} style={{ borderBottom: '1px solid #e2e8f0', backgroundColor: idx % 2 === 0 ? '#ffffff' : '#f8fafc' }}>
+                            <td style={{ padding: '6px' }}>{idx + 1}</td>
+                            <td style={{ padding: '6px', fontWeight: 'bold' }}>{item.given_by}</td>
+                            <td style={{ padding: '6px', textAlign: 'right', color: '#16a34a', fontWeight: 'bold' }}>₹{Number(item.amount).toFixed(2)}</td>
+                          </tr>
+                        ))
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Card 3: List Complete Cash Collections Range */}
+          <div style={{ flex: '1 1 400px', backgroundColor: '#ffffff', borderRadius: '10px', boxShadow: '0 2px 8px rgba(0,0,0,0.08)', border: '1px solid #cbd5e1', overflow: 'hidden' }}>
+            <div style={{ backgroundColor: '#4286f4', color: 'white', padding: '10px 16px', textAlign: 'center', fontWeight: 'bold', fontSize: '18px' }}>
+              List Complete Cash Collections
+            </div>
+
+            <div style={{ padding: '16px' }}>
+              <div style={{ display: 'flex', gap: '8px', marginBottom: '12px', flexWrap: 'wrap', alignItems: 'center' }}>
+                <label style={{ fontWeight: 'bold', fontSize: '13px' }}>From:</label>
+                <input
+                  type="date"
+                  value={fromDate}
+                  onChange={(e) => setFromDate(e.target.value)}
+                  style={{ border: '1px solid #cbd5e1', padding: '6px', borderRadius: '4px', flex: '1' }}
+                />
+                <label style={{ fontWeight: 'bold', fontSize: '13px' }}>To:</label>
+                <input
+                  type="date"
+                  value={toDate}
+                  onChange={(e) => setToDate(e.target.value)}
+                  style={{ border: '1px solid #cbd5e1', padding: '6px', borderRadius: '4px', flex: '1' }}
+                />
+                <button
+                  type="button"
+                  onClick={fetchRangeDate}
+                  style={{ backgroundColor: '#2563eb', color: 'white', border: 'none', borderRadius: '4px', padding: '6px 12px', fontWeight: 'bold', cursor: 'pointer' }}
+                >
+                  Get Collections
+                </button>
+              </div>
+
+              {rangeSearched && (
+                <div style={{ overflowX: 'auto', marginTop: '10px' }}>
+                  <table width="100%" style={{ borderCollapse: 'collapse', border: '1px solid #cbd5e1' }}>
+                    <thead>
+                      <tr style={{ backgroundColor: '#15803d', color: 'white' }}>
+                        <th style={{ padding: '6px', textAlign: 'left' }}>S.No.</th>
+                        <th style={{ padding: '6px', textAlign: 'center' }}>Date</th>
+                        <th style={{ padding: '6px', textAlign: 'left' }}>Given By</th>
+                        <th style={{ padding: '6px', textAlign: 'right' }}>Amount (₹)</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {rangeList.length === 0 ? (
+                        <tr><td colSpan="4" align="center" style={{ padding: '10px', color: '#dc2626' }}>No range collections found</td></tr>
+                      ) : (
+                        rangeList.map((item, idx) => (
+                          <tr key={item.id || idx} style={{ borderBottom: '1px solid #e2e8f0', backgroundColor: idx % 2 === 0 ? '#ffffff' : '#f8fafc' }}>
+                            <td style={{ padding: '6px' }}>{idx + 1}</td>
+                            <td style={{ padding: '6px', textAlign: 'center' }}>{item.date}</td>
+                            <td style={{ padding: '6px', fontWeight: 'bold' }}>{item.given_by}</td>
+                            <td style={{ padding: '6px', textAlign: 'right', color: '#16a34a', fontWeight: 'bold' }}>₹{Number(item.amount).toFixed(2)}</td>
+                          </tr>
+                        ))
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          </div>
+
+        </div>
+      </div>
     </div>
   );
 }

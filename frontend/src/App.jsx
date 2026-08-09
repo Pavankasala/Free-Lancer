@@ -19,6 +19,11 @@ import Bags from './pages/Bags';
 import Settings from './pages/Settings';
 import Kisans from './pages/Kisans';
 
+import Bills from './pages/Bills';
+import Advance from './pages/Advance';
+import SoldData from './pages/SoldData';
+import BuyerBalance from './pages/BuyerBalance';
+
 export default function App() {
   const [user, setUser] = useState(() => {
     const saved = localStorage.getItem('user');
@@ -52,7 +57,8 @@ export default function App() {
         {/* Buyers Details */}
         <Route path="/buyers-details" element={user ? <BuyersDetails user={user} onLogout={handleLogout} /> : <Navigate to="/" />} />
         <Route path="/buyersDetails" element={user ? <BuyersDetails user={user} onLogout={handleLogout} /> : <Navigate to="/" />} />
-        <Route path="/sell" element={user ? <BuyersDetails user={user} onLogout={handleLogout} /> : <Navigate to="/" />} />
+        <Route path="/sell" element={user ? <SoldData user={user} onLogout={handleLogout} /> : <Navigate to="/" />} />
+        <Route path="/sold-data" element={user ? <SoldData user={user} onLogout={handleLogout} /> : <Navigate to="/" />} />
         
         {/* Expenditures */}
         <Route path="/expenditures" element={user ? <Expenditures user={user} onLogout={handleLogout} /> : <Navigate to="/" />} />
@@ -77,9 +83,12 @@ export default function App() {
         <Route path="/localSale" element={user ? <LocalSale user={user} onLogout={handleLogout} /> : <Navigate to="/" />} />
         <Route path="/localsale" element={user ? <LocalSale user={user} onLogout={handleLogout} /> : <Navigate to="/" />} />
         
-        {/* Kisan Balance */}
+        {/* Kisan Balance & Buyer Balance */}
         <Route path="/kisanbalance" element={user ? <KisanBalance user={user} onLogout={handleLogout} /> : <Navigate to="/" />} />
         <Route path="/kisanBalance" element={user ? <KisanBalance user={user} onLogout={handleLogout} /> : <Navigate to="/" />} />
+        <Route path="/buyerbalance" element={user ? <BuyerBalance user={user} onLogout={handleLogout} /> : <Navigate to="/" />} />
+        <Route path="/buyers-balance" element={user ? <BuyerBalance user={user} onLogout={handleLogout} /> : <Navigate to="/" />} />
+        <Route path="/buyerBalance" element={user ? <BuyerBalance user={user} onLogout={handleLogout} /> : <Navigate to="/" />} />
         
         {/* Not Paid / Paid Bills */}
         <Route path="/notpaidbills" element={user ? <NotPaidBills user={user} onLogout={handleLogout} /> : <Navigate to="/" />} />
@@ -93,9 +102,9 @@ export default function App() {
         <Route path="/settings" element={user ? <Settings user={user} onLogout={handleLogout} onUpdateUser={handleUpdateUser} /> : <Navigate to="/" />} />
         <Route path="/kisans" element={user ? <Kisans user={user} onLogout={handleLogout} /> : <Navigate to="/" />} />
 
-        {/* Alias routes */}
-        <Route path="/bills" element={user ? <Home user={user} onLogout={handleLogout} onUpdateUser={handleUpdateUser} /> : <Navigate to="/" />} />
-        <Route path="/advance" element={user ? <Home user={user} onLogout={handleLogout} onUpdateUser={handleUpdateUser} /> : <Navigate to="/" />} />
+        {/* Bills & Advance Dedicated Routes */}
+        <Route path="/bills" element={user ? <Bills user={user} onLogout={handleLogout} /> : <Navigate to="/" />} />
+        <Route path="/advance" element={user ? <Advance user={user} onLogout={handleLogout} /> : <Navigate to="/" />} />
         
         <Route path="*" element={<Navigate to="/" />} />
       </Routes>

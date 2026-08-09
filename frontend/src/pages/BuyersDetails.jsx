@@ -8,7 +8,7 @@ import { API_BASE_URL } from '../api/config';
 export default function BuyersDetails({ user, onLogout }) {
   const [billdate, setBilldate] = useState(new Date().toISOString().split('T')[0]);
   const [name, setName] = useState('');
-  const [channels, setChannels] = useState([{ bags: '', price: '' }]);
+  const [channels, setChannels] = useState([{ kisanName: '', bags: '', price: '' }]);
   const [hamali, setHamali] = useState(user?.default_hamali || 0);
   const [advance, setAdvance] = useState('');
   const [advanceDate, setAdvanceDate] = useState(new Date().toISOString().split('T')[0]);
@@ -25,21 +25,28 @@ export default function BuyersDetails({ user, onLogout }) {
   const [bills, setBills] = useState([]);
   const [selectedBill, setSelectedBill] = useState(null);
   const [confirmDeleteId, setConfirmDeleteId] = useState(null);
+  const [editingBillId, setEditingBillId] = useState(null);
 
   const getLocalBills = () => {
     try {
-      const saved = localStorage.getItem('agri_local_bills');
+      const saved = localStorage.getItem('agri_local_buyer_bills');
       return saved ? JSON.parse(saved) : [];
     } catch (e) {
       return [];
     }
   };
 
-  const saveLocalBill = (newBill) => {
+  const saveOrUpdateLocalBill = (billObj) => {
     try {
       const current = getLocalBills();
-      const updated = [newBill, ...current];
-      localStorage.setItem('agri_local_bills', JSON.stringify(updated));
+      const exists = current.some(b => b.id === billObj.id);
+      let updated;
+      if (exists) {
+        updated = current.map(b => b.id === billObj.id ? { ...b, ...billObj } : b);
+      } else {
+        updated = [billObj, ...current];
+      }
+      localStorage.setItem('agri_local_buyer_bills', JSON.stringify(updated));
     } catch (e) {}
   };
 
@@ -47,7 +54,7 @@ export default function BuyersDetails({ user, onLogout }) {
     try {
       const current = getLocalBills();
       const updated = current.filter(b => b.id !== billId);
-      localStorage.setItem('agri_local_bills', JSON.stringify(updated));
+      localStorage.setItem('agri_local_buyer_bills', JSON.stringify(updated));
     } catch (e) {}
   };
 
@@ -62,7 +69,7 @@ export default function BuyersDetails({ user, onLogout }) {
   const fetchBills = async (selectedDate) => {
     const local = getLocalBills().filter(b => !selectedDate || b.date === selectedDate);
     try {
-      const res = await axios.get(`${API_BASE_URL}/api/home-bills?date=${selectedDate}`);
+      const res = await axios.get(`${API_BASE_URL}/api/buyer-bills?date=${selectedDate}`);
       if (res.data && res.data.success) {
         const apiBills = res.data.bills || [];
         const combined = [...local, ...apiBills.filter(ab => !local.some(lb => lb.id === ab.id))];
@@ -80,7 +87,7 @@ export default function BuyersDetails({ user, onLogout }) {
   const addChannel = (e) => {
     e.preventDefault();
     if (channels.length < 10) {
-      setChannels([...channels, { bags: '', price: '' }]);
+      setChannels([...channels, { kisanName: '', bags: '', price: '' }]);
     } else {
       alert("Maximum channels 10 only");
     }
@@ -92,15 +99,51 @@ export default function BuyersDetails({ user, onLogout }) {
     setChannels(updated);
   };
 
+  const handleEditClick = (b) => {
+    setEditingBillId(b.id);
+    setName(b.name || '');
+    setBilldate(b.date || b.billdate || billdate);
+    if (b.channels && b.channels.length > 0) {
+      setChannels(b.channels);
+    } else {
+      setChannels([{ kisanName: b.name || '', bags: b.no_of_bags || '', price: b.price || '' }]);
+    }
+    setHamali(b.hamali || 0);
+    setAdvance(b.advance || '');
+    setBagsSold(b.bagsSold || '');
+    setPriceSold(b.priceSold || '');
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  const handleCancelEdit = () => {
+    setEditingBillId(null);
+    setName('');
+    setChannels([{ kisanName: '', bags: '', price: '' }]);
+    setAdvance('');
+    setBagsSold('');
+    setPriceSold('');
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
+
+    for (const c of channels) {
+      if (Number(c.bags) < 0 || Number(c.price) < 0) {
+        alert("Invalid input! Bags and Price cannot be negative numbers.");
+        return;
+      }
+    }
+    if (Number(advance) < 0 || Number(hamali) < 0 || Number(bagsSold) < 0 || Number(priceSold) < 0) {
+      alert("Invalid input! Negative values are not allowed.");
+      return;
+    }
 
     const totalBags = channels.reduce((acc, c) => acc + (Number(c.bags) || 0), 0);
     const avgPrice = channels.length > 0 && Number(channels[0].price) ? Number(channels[0].price) : (Number(priceSold) || 0);
 
-    const newBillObj = {
-      id: Date.now(),
-      name: name || 'Kisan',
+    const billObj = {
+      id: editingBillId || Date.now(),
+      name: name || 'Buyer',
       billdate: billdate,
       date: billdate,
       time: advanceTime,
@@ -112,12 +155,12 @@ export default function BuyersDetails({ user, onLogout }) {
       advance: Number(advance) || 0,
       bagsSold: bagsSold,
       priceSold: priceSold,
-      type: 'BUY',
+      type: 'BUYER',
       paid: 'NO'
     };
 
     try {
-      const res = await axios.post(`${API_BASE_URL}/api/add-bill`, {
+      const res = await axios.post(`${API_BASE_URL}/api/add-buyer-bill`, {
         name,
         billdate,
         advanceTime,
@@ -129,285 +172,327 @@ export default function BuyersDetails({ user, onLogout }) {
       });
       if (res.data && res.data.success) {
         if (res.data.bill) {
-          saveLocalBill(res.data.bill);
+          saveOrUpdateLocalBill({ ...res.data.bill, ...billObj });
         } else {
-          saveLocalBill(newBillObj);
+          saveOrUpdateLocalBill(billObj);
         }
       } else {
-        saveLocalBill(newBillObj);
+        saveOrUpdateLocalBill(billObj);
       }
     } catch (err) {
-      saveLocalBill(newBillObj);
+      saveOrUpdateLocalBill(billObj);
     }
 
-    alert('saved successfully');
+    alert(editingBillId ? 'Updated successfully' : 'Saved successfully');
+    setEditingBillId(null);
     setName('');
-    setChannels([{ bags: '', price: '' }]);
+    setChannels([{ kisanName: '', bags: '', price: '' }]);
     setAdvance('');
     setBagsSold('');
     setPriceSold('');
     fetchBills(billdate);
   };
 
-  const formatDateDMY = (dateStr) => {
-    if (!dateStr) return '';
-    const parts = dateStr.split('-');
-    if (parts.length === 3) {
-      return `${parts[2]}-${parts[1]}-${parts[0]}`;
-    }
-    return dateStr;
-  };
+  const totalBagsToday = bills.reduce((acc, b) => acc + (Number(b.no_of_bags) || 0), 0);
+  const totalGrossToday = bills.reduce((acc, b) => acc + (Number(b.no_of_bags * b.price) || 0), 0);
 
   return (
-    <div style={{ fontFamily: "'Times New Roman', Times, serif" }}>
+    <div style={{ fontFamily: "'Times New Roman', Times, serif", backgroundColor: '#f8fafc', minHeight: '100vh' }}>
       <Header user={user} onLogout={onLogout} />
-      
-      <form onSubmit={handleSubmit}>
-        <br />
-        <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-          <tbody>
-            <tr>
-              <td width="25%" valign="top" style={{ paddingLeft: '10px' }}>
-                <table className="tab add-bill-form" style={{ width: '100%', border: '1px solid #8ce86a' }}>
+
+      <div style={{ padding: '16px', maxWidth: '1200px', margin: '0 auto' }}>
+        {/* Responsive Container for Form & Today's Buyer Activity Summary */}
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '20px', alignItems: 'flex-start' }}>
+          
+          {/* Buyers Details Form Card */}
+          <div style={{ flex: '1 1 340px', minWidth: '280px', backgroundColor: '#ffffff', borderRadius: '10px', boxShadow: '0 2px 8px rgba(0,0,0,0.08)', border: '1px solid #cbd5e1', overflow: 'hidden' }}>
+            <div style={{ backgroundColor: '#4286f4', color: 'white', padding: '10px 16px', textAlign: 'center', fontWeight: 'bold', fontSize: '18px' }}>
+              {editingBillId ? 'Edit Buyer Details' : 'Buyers Details'}
+            </div>
+            
+            <form onSubmit={handleSubmit} style={{ padding: '16px' }}>
+              <div style={{ marginBottom: '12px', display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: '8px' }}>
+                <label style={{ width: '100px', fontWeight: 'bold', fontSize: '14px' }}>Date:</label>
+                <input
+                  type="date"
+                  value={billdate}
+                  onChange={(e) => setBilldate(e.target.value)}
+                  required
+                  style={{ border: '1px solid #cbd5e1', padding: '6px', borderRadius: '4px', flex: '1', minWidth: '140px' }}
+                />
+              </div>
+
+              <div style={{ marginBottom: '12px', display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: '8px' }}>
+                <label style={{ width: '100px', fontWeight: 'bold', fontSize: '14px' }}>Buyer Name:</label>
+                <input
+                  type="text"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  placeholder="Buyer Name"
+                  required
+                  style={{ border: '1px solid #cbd5e1', padding: '6px', borderRadius: '4px', flex: '1', minWidth: '140px' }}
+                />
+              </div>
+
+              <div style={{ marginBottom: '8px' }}>
+                <a href="#addChannel" onClick={addChannel} style={{ color: '#2563eb', textDecoration: 'underline', fontWeight: 'bold', fontSize: '14px' }}>
+                  + Click to add a Channel
+                </a>
+              </div>
+
+              <div style={{ marginBottom: '12px', overflowX: 'auto' }}>
+                <table width="100%" border="0" style={{ borderCollapse: 'collapse' }}>
+                  <thead>
+                    <tr style={{ backgroundColor: '#f1f5f9' }}>
+                      <th style={{ padding: '6px', color: '#1e293b', fontSize: '13px', textAlign: 'left' }}>Kisan Name</th>
+                      <th style={{ padding: '6px', color: '#1e293b', fontSize: '13px', textAlign: 'center' }}>No. of Bags</th>
+                      <th style={{ padding: '6px', color: '#1e293b', fontSize: '13px', textAlign: 'center' }}>Price per Bag</th>
+                    </tr>
+                  </thead>
                   <tbody>
-                    <tr>
-                      <th align="center" colSpan="2" style={{ backgroundColor: '#4286f4', color: 'white', padding: '6px' }}>
-                        <center><font size="4"><b>Buyers Details</b></font></center>
-                      </th>
-                    </tr>
-                    <tr>
-                      <td className="form-label">Date</td>
-                      <td align="left" style={{ padding: '4px' }}>
-                        <input
-                          type="date"
-                          name="billdate"
-                          id="billdate"
-                          value={billdate}
-                          onChange={(e) => setBilldate(e.target.value)}
-                          required
-                          style={{ border: '1px solid #767676', width: '150px' }}
-                        />
-                      </td>
-                    </tr>
-                    <tr>
-                      <td className="form-label">Buyers Name</td>
-                      <td align="left" style={{ padding: '4px' }}>
-                        <input
-                          type="text"
-                          name="name"
-                          id="name"
-                          value={name}
-                          onChange={(e) => setName(e.target.value)}
-                          placeholder="Buyers Name"
-                          required
-                          style={{ border: '1px solid #767676', width: '150px' }}
-                        />
-                      </td>
-                    </tr>
-                    <tr>
-                      <td align="left" style={{ padding: '6px 8px', whiteSpace: 'nowrap' }}>
-                        <p style={{ margin: 0 }}>
-                          <a href="#addChannel" onClick={addChannel} style={{ color: '#0000FF', textDecoration: 'underline', fontWeight: 'bold' }}>
-                            <font size="3">Click to add a Channel</font>
-                          </a>
-                        </p>
-                      </td>
-                    </tr>
-                    <tr>
-                      <td colSpan="2" style={{ padding: '4px 6px', textAlign: 'left' }}>
-                        {channels.map((ch, idx) => (
-                          <div key={idx} style={{ marginBottom: '4px', textAlign: 'left' }}>
-                            <input
-                              type="text"
-                              name="BX_NOOFBAGS[]"
-                              value={ch.bags}
-                              onChange={(e) => handleChannelChange(idx, 'bags', e.target.value)}
-                              placeholder="No. Of Bags"
-                              required
-                              style={{ border: '1px solid #767676', width: '110px', marginRight: '6px' }}
-                            />
-                            <input
-                              type="number"
-                              name="BX_PRICE[]"
-                              value={ch.price}
-                              onChange={(e) => handleChannelChange(idx, 'price', e.target.value)}
-                              placeholder="Price per Bag"
-                              required
-                              style={{ border: '1px solid #767676', width: '110px' }}
-                            />
-                          </div>
-                        ))}
-                      </td>
-                    </tr>
-                    <tr>
-                      <td className="form-label">Hamali Per Bag</td>
-                      <td align="left" style={{ padding: '4px' }}>
-                        <input
-                          type="number"
-                          name="txtHamali"
-                          value={hamali}
-                          onChange={(e) => setHamali(e.target.value)}
-                          placeholder="Hamali Per Bag"
-                          style={{ border: '1px solid #767676', width: '150px' }}
-                        />
-                      </td>
-                    </tr>
-                    <tr>
-                      <td className="form-label">Advance</td>
-                      <td align="left" style={{ padding: '4px' }}>
-                        <div style={{ display: 'flex', gap: '4px', alignItems: 'center' }}>
+                    {channels.map((ch, idx) => (
+                      <tr key={idx}>
+                        <td style={{ padding: '4px' }}>
+                          <input
+                            type="text"
+                            value={ch.kisanName}
+                            onChange={(e) => handleChannelChange(idx, 'kisanName', e.target.value)}
+                            placeholder="Kisan Name"
+                            required
+                            style={{ width: '100%', border: '1px solid #cbd5e1', padding: '6px', borderRadius: '4px', boxSizing: 'border-box' }}
+                          />
+                        </td>
+                        <td style={{ padding: '4px' }}>
                           <input
                             type="number"
-                            name="advance"
-                            value={advance}
-                            onChange={(e) => setAdvance(e.target.value)}
-                            placeholder="Advance"
-                            style={{ border: '1px solid #767676', width: '80px' }}
+                            value={ch.bags}
+                            onChange={(e) => handleChannelChange(idx, 'bags', e.target.value)}
+                            placeholder="No. of Bags"
+                            required
+                            style={{ width: '100%', border: '1px solid #cbd5e1', padding: '6px', borderRadius: '4px', boxSizing: 'border-box' }}
                           />
+                        </td>
+                        <td style={{ padding: '4px' }}>
                           <input
-                            type="date"
-                            name="advanceDate"
-                            value={advanceDate}
-                            onChange={(e) => setAdvanceDate(e.target.value)}
-                            style={{ border: '1px solid #767676', width: '125px' }}
+                            type="number"
+                            value={ch.price}
+                            onChange={(e) => handleChannelChange(idx, 'price', e.target.value)}
+                            placeholder="Price per Bag"
+                            required
+                            style={{ width: '100%', border: '1px solid #cbd5e1', padding: '6px', borderRadius: '4px', boxSizing: 'border-box' }}
                           />
-                          <TimePicker value={advanceTime} onChange={(t) => setAdvanceTime(t)} />
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+
+              <div style={{ marginBottom: '12px', display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: '8px' }}>
+                <label style={{ width: '100px', fontWeight: 'bold', fontSize: '14px' }}>Advance:</label>
+                <div style={{ display: 'flex', gap: '6px', flex: '1', flexWrap: 'wrap' }}>
+                  <input
+                    type="number"
+                    value={advance}
+                    onChange={(e) => setAdvance(e.target.value)}
+                    placeholder="Amount"
+                    style={{ border: '1px solid #cbd5e1', padding: '6px', borderRadius: '4px', width: '80px' }}
+                  />
+                  <input
+                    type="date"
+                    value={advanceDate}
+                    onChange={(e) => setAdvanceDate(e.target.value)}
+                    style={{ border: '1px solid #cbd5e1', padding: '6px', borderRadius: '4px', flex: '1', minWidth: '120px' }}
+                  />
+                  <TimePicker value={advanceTime} onChange={(t) => setAdvanceTime(t)} />
+                </div>
+              </div>
+
+              <div style={{ marginBottom: '16px', display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: '8px' }}>
+                <label style={{ width: '100px', fontWeight: 'bold', fontSize: '14px' }}>Price of Sold Bag:</label>
+                <input
+                  type="number"
+                  value={priceSold}
+                  onChange={(e) => setPriceSold(e.target.value)}
+                  placeholder="Price of Sold Bag"
+                  style={{ border: '1px solid #cbd5e1', padding: '6px', borderRadius: '4px', flex: '1', minWidth: '140px' }}
+                />
+              </div>
+
+              <div style={{ display: 'flex', gap: '8px' }}>
+                <button
+                  type="submit"
+                  style={{
+                    flex: '1',
+                    padding: '10px',
+                    backgroundColor: editingBillId ? '#eab308' : '#16a34a',
+                    color: 'white',
+                    border: 'none',
+                    borderRadius: '6px',
+                    fontSize: '16px',
+                    fontWeight: 'bold',
+                    cursor: 'pointer'
+                  }}
+                >
+                  {editingBillId ? 'Update Details' : 'Submit'}
+                </button>
+                {editingBillId && (
+                  <button
+                    type="button"
+                    onClick={handleCancelEdit}
+                    style={{
+                      padding: '10px 16px',
+                      backgroundColor: '#64748b',
+                      color: 'white',
+                      border: 'none',
+                      borderRadius: '6px',
+                      fontSize: '15px',
+                      fontWeight: 'bold',
+                      cursor: 'pointer'
+                    }}
+                  >
+                    Cancel
+                  </button>
+                )}
+              </div>
+            </form>
+          </div>
+
+          {/* Right Column Card: Today's Buyer Activity Summary */}
+          <div style={{ flex: '1 1 340px', minWidth: '280px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
+            <div style={{ backgroundColor: '#ffffff', borderRadius: '10px', padding: '16px', boxShadow: '0 2px 8px rgba(0,0,0,0.08)', border: '1px solid #cbd5e1' }}>
+              <h3 style={{ margin: '0 0 12px 0', color: '#15803d', fontSize: '1.1rem', fontWeight: 'bold' }}>📊 Today's Buyer Summary</h3>
+              
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(110px, 1fr))', gap: '10px' }}>
+                <div style={{ backgroundColor: '#f0fdf4', padding: '10px', borderRadius: '8px', border: '1px solid #bbf7d0', textAlign: 'center' }}>
+                  <span style={{ fontSize: '12px', color: '#166534', fontWeight: 'bold' }}>BUYER BILLS</span>
+                  <div style={{ fontSize: '1.3rem', fontWeight: 'bold', color: '#15803d' }}>{bills.length}</div>
+                </div>
+
+                <div style={{ backgroundColor: '#eff6ff', padding: '10px', borderRadius: '8px', border: '1px solid #bfdbfe', textAlign: 'center' }}>
+                  <span style={{ fontSize: '12px', color: '#1e40af', fontWeight: 'bold' }}>TOTAL BAGS</span>
+                  <div style={{ fontSize: '1.3rem', fontWeight: 'bold', color: '#1d4ed8' }}>{totalBagsToday}</div>
+                </div>
+
+                <div style={{ backgroundColor: '#fefce8', padding: '10px', borderRadius: '8px', border: '1px solid #fef08a', textAlign: 'center' }}>
+                  <span style={{ fontSize: '12px', color: '#854d0e', fontWeight: 'bold' }}>GROSS TOTAL</span>
+                  <div style={{ fontSize: '1.2rem', fontWeight: 'bold', color: '#a16207' }}>₹{totalGrossToday.toLocaleString()}</div>
+                </div>
+              </div>
+            </div>
+
+            {/* Quick Receipts List Card */}
+            <div style={{ backgroundColor: '#ffffff', borderRadius: '10px', padding: '16px', boxShadow: '0 2px 8px rgba(0,0,0,0.08)', border: '1px solid #cbd5e1' }}>
+              <h3 style={{ margin: '0 0 12px 0', color: '#1e293b', fontSize: '1.1rem', fontWeight: 'bold' }}>📄 Quick Print & Send Receipts</h3>
+              
+              {bills.length === 0 ? (
+                <p style={{ color: '#64748b', fontSize: '14px', margin: 0 }}>No buyer bills created for today yet. Fill out the form to add a buyer bill.</p>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', maxHeight: '300px', overflowY: 'auto' }}>
+                  {bills.map((b) => (
+                    <div key={b.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#f8fafc', padding: '10px', borderRadius: '6px', border: '1px solid #e2e8f0', flexWrap: 'wrap', gap: '8px' }}>
+                      <div>
+                        <strong style={{ fontSize: '14px', color: '#0f172a' }}>{b.name}</strong>
+                        <div style={{ fontSize: '12px', color: '#64748b' }}>
+                          {b.no_of_bags} Bags @ ₹{b.price} = <span style={{ fontWeight: 'bold', color: '#16a34a' }}>₹{b.no_of_bags * b.price}</span>
+                        </div>
+                      </div>
+                      <div style={{ display: 'flex', gap: '6px' }}>
+                        <button
+                          type="button"
+                          onClick={() => setSelectedBill(b)}
+                          style={{ backgroundColor: '#2563eb', color: 'white', border: 'none', borderRadius: '4px', padding: '5px 10px', fontSize: '12px', fontWeight: 'bold', cursor: 'pointer' }}
+                        >
+                          📄 Invoice
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+
+        <br />
+
+        {/* Buyer Bills On This Day Table (Responsive Container) */}
+        <div style={{ backgroundColor: '#ffffff', borderRadius: '10px', padding: '16px', boxShadow: '0 2px 8px rgba(0,0,0,0.08)', border: '1px solid #8ce86a' }}>
+          <h2 align="center" style={{ color: '#15803d', margin: '0 0 16px 0', fontSize: '1.3rem', fontWeight: 'bold' }}>
+            - Buyer Bills On This Day ({billdate}) -
+          </h2>
+
+          <div style={{ overflowX: 'auto' }}>
+            {bills.length === 0 ? (
+              <h3 align="center" style={{ color: '#dc2626', margin: '16px 0' }}>No Buyer Bills Found</h3>
+            ) : (
+              <table width="100%" style={{ borderCollapse: 'collapse', minWidth: '600px' }}>
+                <thead>
+                  <tr style={{ backgroundColor: '#15803d', color: 'white' }}>
+                    <th style={{ padding: '8px', textAlign: 'left' }}>S.No</th>
+                    <th style={{ padding: '8px', textAlign: 'left' }}>Buyer Name</th>
+                    <th style={{ padding: '8px', textAlign: 'center' }}>Bags</th>
+                    <th style={{ padding: '8px', textAlign: 'center' }}>Price</th>
+                    <th style={{ padding: '8px', textAlign: 'right' }}>Total (₹)</th>
+                    <th style={{ padding: '8px', textAlign: 'right' }}>Advance (₹)</th>
+                    <th style={{ padding: '8px', textAlign: 'center' }}>Date & Time</th>
+                    <th style={{ padding: '8px', textAlign: 'center' }}>Paid</th>
+                    <th style={{ padding: '8px', textAlign: 'center' }}>Action</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {bills.map((b, idx) => (
+                    <tr key={b.id || idx} style={{ borderBottom: '1px solid #e2e8f0', backgroundColor: idx % 2 === 0 ? '#ffffff' : '#f8fafc' }}>
+                      <td style={{ padding: '8px' }}>{idx + 1}</td>
+                      <td style={{ padding: '8px', fontWeight: 'bold', color: '#0f172a' }}>{b.name}</td>
+                      <td style={{ padding: '8px', textAlign: 'center' }}>{b.no_of_bags}</td>
+                      <td style={{ padding: '8px', textAlign: 'center' }}>₹{b.price}</td>
+                      <td style={{ padding: '8px', textAlign: 'right', fontWeight: 'bold' }}>₹{(b.no_of_bags * b.price).toLocaleString()}</td>
+                      <td style={{ padding: '8px', textAlign: 'right', color: '#dc2626' }}>₹{Number(b.advance || 0).toLocaleString()}</td>
+                      <td style={{ padding: '8px', textAlign: 'center', fontSize: '13px' }}>{b.date || billdate} {b.time || b.advanceTime || ''}</td>
+                      <td style={{ padding: '8px', textAlign: 'center', fontWeight: 'bold', color: b.paid === 'YES' ? '#16a34a' : '#dc2626' }}>{b.paid || 'NO'}</td>
+                      <td style={{ padding: '8px', textAlign: 'center' }}>
+                        <div style={{ display: 'flex', gap: '4px', justifyContent: 'center' }}>
+                          <button
+                            type="button"
+                            onClick={() => setSelectedBill(b)}
+                            style={{ backgroundColor: '#2563eb', color: '#ffffff', border: 'none', borderRadius: '4px', padding: '4px 8px', cursor: 'pointer', fontSize: '12px', fontWeight: 'bold' }}
+                          >
+                            View
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleEditClick(b)}
+                            style={{ backgroundColor: '#eab308', color: '#ffffff', border: 'none', borderRadius: '4px', padding: '4px 8px', cursor: 'pointer', fontSize: '12px', fontWeight: 'bold' }}
+                          >
+                            Edit
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setConfirmDeleteId(b.id)}
+                            style={{ backgroundColor: '#dc2626', color: '#ffffff', border: 'none', borderRadius: '4px', padding: '4px 8px', cursor: 'pointer', fontSize: '12px', fontWeight: 'bold' }}
+                          >
+                            Delete
+                          </button>
                         </div>
                       </td>
                     </tr>
-                    <tr>
-                      <td className="form-label">Price of Sold Bag</td>
-                      <td align="left" style={{ padding: '4px' }}>
-                        <input
-                          type="number"
-                          name="priceSold"
-                          value={priceSold}
-                          onChange={(e) => setPriceSold(e.target.value)}
-                          placeholder="Price of Sold Bag"
-                          style={{ border: '1px solid #767676', width: '150px' }}
-                        />
-                      </td>
-                    </tr>
-                    <tr>
-                      <td></td>
-                      <td align="left" style={{ padding: '4px' }}>
-                        <input type="submit" className="btn" id="submit" name="submit" value="Submit" />
-                      </td>
-                    </tr>
-                  </tbody>
-                </table>
-              </td>
-              <td width="35%" valign="top">&nbsp;</td>
-              <td width="40%" valign="top" align="right" style={{ paddingRight: '20px' }}>
-                <img
-                  src="/printbills.png"
-                  id="btnPrint"
-                  name="btnPrint"
-                  alt="Print Bills"
-                  style={{ cursor: 'pointer', marginTop: '120px' }}
-                  onClick={() => alert("Print Bill screen")}
-                />
-              </td>
-            </tr>
-          </tbody>
-        </table>
-      </form>
-
-      <br />
-      <div style={{ padding: '0 10px' }}>
-        <table width="100%" className="tab" style={{ border: '1px solid #8ce86a' }}>
-          <tbody>
-            <tr>
-              <td>
-                <h2 align="center" style={{ color: 'green', backgroundColor: 'white', margin: '5px 0' }}>
-                  - Bills On This Day -
-                </h2>
-              </td>
-            </tr>
-            <tr>
-              <td>
-                {bills.length === 0 ? (
-                  <h2><font color="red">No Bills Found</font></h2>
-                ) : (
-                  <table width="100%" border="0" style={{ borderCollapse: 'collapse' }}>
-                    <thead>
-                      <tr style={{ backgroundColor: '#4CAF50', color: 'white' }}>
-                        <th align="left" style={{ backgroundColor: '#4CAF50', color: 'white' }}>S.No.</th>
-                        <th align="left" style={{ backgroundColor: '#4CAF50', color: 'white' }}>Buyers Name</th>
-                        <th align="left" style={{ backgroundColor: '#4CAF50', color: 'white' }}>No.of bags</th>
-                        <th align="left" style={{ backgroundColor: '#4CAF50', color: 'white' }}>Price</th>
-                        <th align="left" style={{ backgroundColor: '#4CAF50', color: 'white' }}>Total</th>
-                        <th align="left" style={{ backgroundColor: '#4CAF50', color: 'white' }}>Advance</th>
-                        <th align="left" style={{ backgroundColor: '#4CAF50', color: 'white' }}>Date & Time</th>
-                        <th align="left" style={{ backgroundColor: '#4CAF50', color: 'white' }}>Paid</th>
-                        <th align="left" style={{ backgroundColor: '#4CAF50', color: 'white' }}>Action</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {bills.map((b, idx) => (
-                        <tr key={b.id} style={{ borderBottom: '1px solid #ddd' }}>
-                          <td align="left">{idx + 1}</td>
-                          <td align="left">{b.name}</td>
-                          <td align="left"><b>{b.no_of_bags}</b></td>
-                          <td align="left"><b>{b.price}</b></td>
-                          <td align="left"><b>{(b.no_of_bags * b.price).toFixed(2)}</b></td>
-                          <td align="left"><b>₹ {(Number(b.advance) || 0).toFixed(2)}</b></td>
-                          <td align="left">{b.date} {b.time || b.advanceTime || b.advanceDateTime || '11:35 PM'}</td>
-                          <td align="left"><font color={b.paid === 'YES' ? 'blue' : 'red'}>{b.paid || 'NO'}</font></td>
-                          <td align="left">
-                            <button
-                              type="button"
-                              onClick={() => setSelectedBill(b)}
-                              style={{
-                                backgroundColor: '#2563eb',
-                                color: '#ffffff',
-                                border: 'none',
-                                borderRadius: '3px',
-                                padding: '2px 8px',
-                                cursor: 'pointer',
-                                marginRight: '6px',
-                                fontSize: '12px',
-                                fontWeight: 'bold'
-                              }}
-                            >
-                              View
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => setConfirmDeleteId(b.id)}
-                              style={{
-                                backgroundColor: '#dc2626',
-                                color: '#ffffff',
-                                border: 'none',
-                                borderRadius: '3px',
-                                padding: '2px 8px',
-                                cursor: 'pointer',
-                                fontSize: '12px',
-                                fontWeight: 'bold'
-                              }}
-                            >
-                              Delete
-                            </button>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                )}
-              </td>
-            </tr>
-          </tbody>
-        </table>
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </div>
+        </div>
       </div>
 
       <BillModal bill={selectedBill} onClose={() => setSelectedBill(null)} />
 
-      {confirmDeleteId && (
-        <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(15, 23, 42, 0.65)', backdropFilter: 'blur(4px)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 2000, padding: '16px' }}>
-          <div style={{ backgroundColor: '#ffffff', borderRadius: '12px', width: '100%', maxWidth: '400px', padding: '24px', textAlign: 'center', boxShadow: '0 20px 25px -5px rgba(0,0,0,0.2)', border: '1px solid #cbd5e1' }}>
+      {confirmDeleteId !== null && (
+        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0, 0, 0, 0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
+          <div style={{ backgroundColor: '#ffffff', borderRadius: '12px', padding: '24px', width: '90%', maxWidth: '400px', textAlign: 'center', boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1)' }}>
             <h3 style={{ margin: '0 0 10px 0', color: '#dc2626', fontSize: '1.25rem' }}>Confirm Delete</h3>
             <p style={{ margin: '0 0 20px 0', fontSize: '1rem', color: '#334155' }}>
-              Are you sure you want to delete this bill?
+              Are you sure you want to delete this buyer bill?
             </p>
             <div style={{ display: 'flex', justifyContent: 'center', gap: '12px' }}>
               <button

@@ -1,9 +1,10 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 
 export default function Header({ user, onLogout }) {
   const location = useLocation();
   const navigate = useNavigate();
+  const [menuOpen, setMenuOpen] = useState(false);
 
   const handleLogout = (e) => {
     e.preventDefault();
@@ -12,9 +13,7 @@ export default function Header({ user, onLogout }) {
   };
 
   const businessName = user?.business_name || user?.company_full_name || user?.company_name || 'Agri Commission Manager';
-  const address = user?.address || '';
   const ownerName = user?.owner_name || user?.name || 'Operator';
-  const phone = user?.phone || user?.mobile || '';
 
   const navLinks = [
     { path: '/home', label: 'Home' },
@@ -27,7 +26,8 @@ export default function Header({ user, onLogout }) {
     { path: '/balancesheet', label: 'Balance Sheet' },
     { path: '/sell', label: 'Sold Data' },
     { path: '/beatpaper', label: 'Beat Paper' },
-    { path: '/kisanbalance', label: 'kisan Balance' },
+    { path: '/kisanbalance', label: 'Kisan Balance' },
+    { path: '/buyerbalance', label: 'Buyer Balance' },
     ...(user?.user_type === 'ADM' ? [{ path: '/sales', label: 'Delhi' }] : []),
     { path: '/notpaidbills', label: 'Not Paid Bills' },
     { path: '/paidBills', label: 'Paid Bills' },
@@ -35,51 +35,323 @@ export default function Header({ user, onLogout }) {
     { path: '/localSale', label: 'Local Sale' },
   ];
 
+  const quickLinks = [
+    { path: '/bags', label: '📦 Bags' },
+    { path: '/settings', label: '⚙️ Settings' },
+    { path: '/kisans', label: '👨‍🌾 Kisans' },
+  ];
+
   return (
-    <header style={{ backgroundColor: '#4286f4', color: 'white', padding: '6px 12px' }}>
-      <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'space-between', alignItems: 'center' }}>
-        <h2 style={{ margin: 0, fontFamily: "'Times New Roman', Times, serif" }}>
-          <Link to="/home" style={{ color: 'white', textDecoration: 'none', fontSize: '24px', fontWeight: 'bold' }}>
-            {businessName}
+    <>
+      <style>{`
+        .agri-header {
+          background: linear-gradient(135deg, #1e40af 0%, #2563eb 50%, #3b82f6 100%);
+          color: white;
+          position: sticky;
+          top: 0;
+          z-index: 100;
+          box-shadow: 0 2px 12px rgba(0,0,0,0.15);
+        }
+
+        .header-top {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          padding: 10px 20px;
+          gap: 12px;
+        }
+
+        .header-brand {
+          display: flex;
+          align-items: center;
+          gap: 10px;
+          text-decoration: none;
+          color: white;
+          min-width: 0;
+        }
+
+        .brand-icon {
+          width: 36px;
+          height: 36px;
+          background: rgba(255,255,255,0.2);
+          border-radius: 10px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          font-size: 20px;
+          flex-shrink: 0;
+        }
+
+        .brand-text h1 {
+          font-size: 18px;
+          font-weight: 800;
+          margin: 0;
+          color: white;
+          line-height: 1.2;
+          white-space: nowrap;
+          overflow: hidden;
+          text-overflow: ellipsis;
+        }
+
+        .brand-text span {
+          font-size: 11px;
+          opacity: 0.8;
+          font-weight: 400;
+        }
+
+        .header-actions {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          flex-shrink: 0;
+        }
+
+        .header-user-badge {
+          display: none;
+          background: rgba(255,255,255,0.15);
+          padding: 5px 12px;
+          border-radius: 20px;
+          font-size: 12px;
+          font-weight: 500;
+          white-space: nowrap;
+        }
+
+        .header-logout-btn {
+          background: rgba(255,255,255,0.15);
+          color: white;
+          border: 1px solid rgba(255,255,255,0.25);
+          padding: 6px 14px;
+          border-radius: 6px;
+          font-size: 13px;
+          font-weight: 600;
+          cursor: pointer;
+          transition: all 0.2s;
+        }
+
+        .header-logout-btn:hover {
+          background: rgba(255,255,255,0.25);
+          transform: none;
+        }
+
+        .hamburger {
+          display: none;
+          flex-direction: column;
+          gap: 5px;
+          cursor: pointer;
+          padding: 6px;
+          border: none;
+          background: transparent;
+        }
+
+        .hamburger span {
+          display: block;
+          width: 22px;
+          height: 2.5px;
+          background: white;
+          border-radius: 2px;
+          transition: all 0.3s;
+        }
+
+        .hamburger.open span:nth-child(1) { transform: rotate(45deg) translate(5px, 5px); }
+        .hamburger.open span:nth-child(2) { opacity: 0; }
+        .hamburger.open span:nth-child(3) { transform: rotate(-45deg) translate(5px, -5px); }
+
+        .header-nav {
+          background: rgba(0,0,0,0.08);
+          border-top: 1px solid rgba(255,255,255,0.1);
+        }
+
+        .nav-scroll {
+          display: flex;
+          flex-wrap: wrap;
+          justify-content: center;
+          gap: 3px;
+          padding: 6px 12px;
+          list-style: none;
+          margin: 0;
+        }
+
+        .nav-link {
+          display: inline-block;
+          color: rgba(255,255,255,0.88);
+          text-decoration: none;
+          padding: 5px 12px;
+          border-radius: 6px;
+          font-size: 13px;
+          font-weight: 500;
+          white-space: nowrap;
+          transition: all 0.15s ease;
+        }
+
+        .nav-link:hover {
+          background: rgba(255,255,255,0.15);
+          color: #fff;
+        }
+
+        .nav-link.active {
+          background: rgba(255,255,255,0.22);
+          color: #fff;
+          font-weight: 600;
+        }
+
+        .quick-links-bar {
+          display: flex;
+          justify-content: center;
+          gap: 14px;
+          padding: 4px 12px 6px;
+          border-top: 1px solid rgba(255,255,255,0.06);
+        }
+
+        .quick-link {
+          color: rgba(255,255,255,0.7);
+          text-decoration: none;
+          font-size: 12px;
+          font-weight: 500;
+          transition: all 0.15s;
+        }
+
+        .quick-link:hover {
+          color: #fff;
+        }
+
+        /* ===== RESPONSIVE ===== */
+        @media (min-width: 769px) {
+          .header-user-badge { display: block; }
+        }
+
+        @media (max-width: 768px) {
+          .header-top {
+            padding: 8px 14px;
+          }
+
+          .brand-text h1 {
+            font-size: 15px;
+          }
+
+          .brand-text span {
+            display: none;
+          }
+
+          .hamburger {
+            display: flex;
+          }
+
+          .header-nav {
+            max-height: 0;
+            overflow: hidden;
+            transition: max-height 0.35s ease;
+          }
+
+          .header-nav.open {
+            max-height: 600px;
+          }
+
+          .nav-scroll {
+            flex-direction: column;
+            gap: 2px;
+            padding: 8px 14px;
+          }
+
+          .nav-link {
+            padding: 10px 14px;
+            font-size: 14px;
+            border-radius: 8px;
+          }
+
+          .nav-link:hover, .nav-link.active {
+            background: rgba(255,255,255,0.12);
+          }
+
+          .quick-links-bar {
+            flex-direction: column;
+            gap: 2px;
+            padding: 0 14px 10px;
+          }
+
+          .quick-link {
+            padding: 8px 14px;
+            background: rgba(255,255,255,0.06);
+            border-radius: 8px;
+            font-size: 13px;
+            display: block;
+          }
+        }
+
+        @media (max-width: 480px) {
+          .brand-icon {
+            width: 30px;
+            height: 30px;
+            font-size: 16px;
+          }
+
+          .brand-text h1 {
+            font-size: 14px;
+          }
+
+          .header-logout-btn {
+            font-size: 12px;
+            padding: 5px 10px;
+          }
+        }
+      `}</style>
+
+      <header className="agri-header">
+        <div className="header-top">
+          <Link to="/home" className="header-brand">
+            <div className="brand-icon">🌱</div>
+            <div className="brand-text">
+              <h1>{businessName}</h1>
+              <span>Commission Agent</span>
+            </div>
           </Link>
-        </h2>
-        <a href="#logout" onClick={handleLogout} style={{ color: 'white', textDecoration: 'underline', fontSize: '15px', fontWeight: 'bold' }}>
-          Logout
-        </a>
-      </div>
 
-      <p style={{ margin: '6px 0', fontSize: '13px', fontWeight: 'normal', textAlign: 'center', opacity: 0.95 }}>
-        {[businessName, address, ownerName, phone].filter(Boolean).join(' | ')}
-        &nbsp;&nbsp;&nbsp;&nbsp;
-        [<font color="yellow">{user?.user_name || user?.role || 'Operator'}</font>]&nbsp;&nbsp;&nbsp;&nbsp;
-        <Link to="/bags" style={{ color: 'yellow', textDecoration: 'underline' }}>Bags</Link>&nbsp;&nbsp;&nbsp;&nbsp;
-        <Link to="/settings" style={{ color: 'pink', textDecoration: 'underline' }}>Settings</Link>&nbsp;&nbsp;&nbsp;&nbsp;
-        <Link to="/kisans" style={{ color: 'pink', textDecoration: 'underline' }}>Kisan Data</Link>
-      </p>
+          <div className="header-actions">
+            <div className="header-user-badge">
+              👤 {ownerName}
+            </div>
+            <button className="header-logout-btn" onClick={handleLogout}>
+              Logout
+            </button>
+            <button
+              className={`hamburger ${menuOpen ? 'open' : ''}`}
+              onClick={() => setMenuOpen(!menuOpen)}
+              aria-label="Toggle navigation"
+            >
+              <span></span>
+              <span></span>
+              <span></span>
+            </button>
+          </div>
+        </div>
 
-      <nav style={{ marginTop: '6px' }}>
-        <ul style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'center', gap: '6px', margin: 0, padding: 0, listStyle: 'none' }}>
-          {navLinks.map((link) => (
-            <li key={link.path}>
+        <nav className={`header-nav ${menuOpen ? 'open' : ''}`}>
+          <ul className="nav-scroll">
+            {navLinks.map((link) => (
+              <li key={link.path}>
+                <Link
+                  to={link.path}
+                  className={`nav-link ${location.pathname === link.path ? 'active' : ''}`}
+                  onClick={() => setMenuOpen(false)}
+                >
+                  {link.label}
+                </Link>
+              </li>
+            ))}
+          </ul>
+          <div className="quick-links-bar">
+            {quickLinks.map((link) => (
               <Link
+                key={link.path}
                 to={link.path}
-                className={location.pathname === link.path ? 'active' : ''}
-                style={{
-                  color: 'white',
-                  textDecoration: 'none',
-                  padding: '4px 8px',
-                  borderRadius: '4px',
-                  fontSize: '13px',
-                  backgroundColor: location.pathname === link.path ? '#1d4ed8' : 'transparent',
-                  display: 'inline-block'
-                }}
+                className="quick-link"
+                onClick={() => setMenuOpen(false)}
               >
                 {link.label}
               </Link>
-            </li>
-          ))}
-        </ul>
-      </nav>
-    </header>
+            ))}
+          </div>
+        </nav>
+      </header>
+    </>
   );
 }

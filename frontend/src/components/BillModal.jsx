@@ -333,7 +333,7 @@ function BillModal({ bill, onClose }) {
             </div>
 
             <div className="summary-row" style={{ display: "flex", justifyContent: "space-between", color: "#dc2626" }}>
-              <span>Damage (5%):</span>
+              <span>Damage (6%):</span>
               <span>- ₹{damagedGoodsVal.toLocaleString()}</span>
             </div>
 

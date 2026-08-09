@@ -9,11 +9,65 @@ def get_beat_paper():
     date = request.args.get('date', datetime.now().strftime('%Y-%m-%d'))
     conn = db.get_db()
     cursor = conn.cursor()
-    cursor.execute("SELECT * FROM inventory WHERE date = ? ORDER BY id DESC", (date,))
+    p = db.ph()
+    cursor.execute(f"SELECT * FROM inventory WHERE date = {p} AND (type = 'BUY' OR type IS NULL) ORDER BY id DESC", (date,))
     rows = cursor.fetchall()
     conn.close()
     return jsonify({'success': True, 'reports': [dict(r) for r in rows]})
 
+@reports_bp.route('/api/sms-to-send', methods=['GET'])
+def get_sms_to_send():
+    date = request.args.get('date', datetime.now().strftime('%Y-%m-%d'))
+    conn = db.get_db()
+    cursor = conn.cursor()
+    p = db.ph()
+
+    cursor.execute(f"SELECT * FROM inventory WHERE date = {p} AND (type = 'BUY' OR type IS NULL) ORDER BY id DESC", (date,))
+    rows = cursor.fetchall()
+    conn.close()
+
+    bills = [dict(r) for r in rows]
+    sms_list = []
+
+    for idx, bill in enumerate(bills):
+        name = bill.get('name', 'Kisan')
+        bags = bill.get('no_of_bags', 0)
+        price = bill.get('price', 0)
+        mobile = bill.get('mobile', '-')
+        msg = f"Hi {name}, (Total Bags: {bags})\n   {bags} X {price}\n   --- I.L.C.\nMobile No: {mobile}"
+        sms_list.append({
+            'sno': idx + 1,
+            'kisanName': name,
+            'mobile': mobile,
+            'smsText': msg
+        })
+
+    return jsonify({'success': True, 'sms_list': sms_list})
+
+@reports_bp.route('/api/sms-history', methods=['GET', 'POST'])
+def sms_history():
+    conn = db.get_db()
+    cursor = conn.cursor()
+    p = db.ph()
+
+    if request.method == 'POST':
+        data = request.get_json() or {}
+        date = data.get('date', datetime.now().strftime('%Y-%m-%d'))
+        mobile = data.get('mobile', '')
+        message = data.get('message', '')
+        cursor.execute(f"INSERT INTO sms_logs (date, mobile, message, status) VALUES ({p}, {p}, {p}, 'SENT')", (date, mobile, message))
+        conn.commit()
+        conn.close()
+        return jsonify({'success': True, 'message': 'SMS logged'})
+
+    date = request.args.get('date')
+    if date:
+        cursor.execute(f"SELECT * FROM sms_logs WHERE date = {p} ORDER BY id DESC", (date,))
+    else:
+        cursor.execute("SELECT * FROM sms_logs ORDER BY id DESC")
+    rows = cursor.fetchall()
+    conn.close()
+    return jsonify({'success': True, 'history': [dict(r) for r in rows]})
 
 @reports_bp.route('/api/send-sms', methods=['POST', 'OPTIONS'])
 def send_sms():
@@ -23,24 +77,16 @@ def send_sms():
     data = request.get_json() or {}
     mobile = (data.get('mobile') or data.get('phone') or '').strip()
     message = (data.get('message') or '').strip()
-    bill_id = data.get('bill_id')
+    date = data.get('date', datetime.now().strftime('%Y-%m-%d'))
 
     if not message:
         return jsonify({'success': False, 'message': 'SMS message content is required'}), 400
 
-    clean_mobile = ''.join(filter(str.isdigit, str(mobile)))
-    if len(clean_mobile) == 10:
-        clean_mobile = "91" + clean_mobile
+    conn = db.get_db()
+    cursor = conn.cursor()
+    p = db.ph()
+    cursor.execute(f"INSERT INTO sms_logs (date, mobile, message, status) VALUES ({p}, {p}, {p}, 'SENT')", (date, mobile, message))
+    conn.commit()
+    conn.close()
 
-    print(f"[SMS API] Sending SMS to +{clean_mobile}: {message}")
-
-    return jsonify({
-        'success': True,
-        'message': f'SMS dispatched successfully to {mobile or "recipient"}',
-        'details': {
-            'to': clean_mobile,
-            'body': message,
-            'bill_id': bill_id,
-            'timestamp': datetime.now().strftime('%Y-%m-%d %I:%M %p')
-        }
-    })
+    return jsonify({'success': True, 'message': f'SMS sent to {mobile}'})

@@ -18,7 +18,6 @@ def get_db():
             from psycopg.rows import dict_row
             return psycopg.connect(DATABASE_URL, row_factory=dict_row)
     else:
-        # Fallback to local SQLite database
         conn = sqlite3.connect(os.path.join(os.path.dirname(__file__), 'lemons.db'))
         conn.row_factory = sqlite3.Row
         return conn
@@ -32,7 +31,7 @@ def init_db():
     cursor = conn.cursor()
     
     if DATABASE_URL:
-        # Neon PostgreSQL Schema
+        # PostgreSQL Schema
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS "user" (
                 user_id SERIAL PRIMARY KEY,
@@ -70,7 +69,32 @@ def init_db():
                 hamali REAL DEFAULT 0.0,
                 remote_commission REAL DEFAULT 0.0,
                 advance REAL DEFAULT 0.0,
-                paid VARCHAR(10) DEFAULT 'NO'
+                paid VARCHAR(10) DEFAULT 'NO',
+                confirmed BOOLEAN DEFAULT FALSE
+            );
+        ''')
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS sold_data (
+                id SERIAL PRIMARY KEY,
+                date VARCHAR(50),
+                name VARCHAR(100),
+                sold_to VARCHAR(100),
+                no_of_bags INT DEFAULT 0,
+                hamali_per_bag REAL DEFAULT 0.0,
+                party_commission VARCHAR(50),
+                lorry_no VARCHAR(50),
+                lorry_charges REAL DEFAULT 0.0,
+                tons REAL DEFAULT 0.0,
+                enam VARCHAR(100),
+                lorry_advance REAL DEFAULT 0.0,
+                village_ref VARCHAR(150)
+            );
+        ''')
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS kisans (
+                id SERIAL PRIMARY KEY,
+                name VARCHAR(100),
+                mobile VARCHAR(50)
             );
         ''')
         cursor.execute('''
@@ -97,7 +121,22 @@ def init_db():
                 mobile VARCHAR(50)
             );
         ''')
-        # Check admin
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS sms_logs (
+                id SERIAL PRIMARY KEY,
+                date VARCHAR(50),
+                mobile VARCHAR(50),
+                message TEXT,
+                status VARCHAR(50) DEFAULT 'SENT'
+            );
+        ''')
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS bags_config (
+                id SERIAL PRIMARY KEY,
+                bag_type VARCHAR(100),
+                capacity VARCHAR(50)
+            );
+        ''')
         cursor.execute("SELECT * FROM \"user\" WHERE user_name = 'admin'")
         if not cursor.fetchone():
             pwd_hash = hashlib.md5("admin".encode()).hexdigest()
@@ -127,14 +166,6 @@ def init_db():
                 license_expires_on TEXT
             )
         ''')
-        try:
-            cursor.execute("ALTER TABLE user ADD COLUMN email TEXT")
-        except sqlite3.OperationalError:
-            pass
-        try:
-            cursor.execute("ALTER TABLE user ADD COLUMN address TEXT")
-        except sqlite3.OperationalError:
-            pass
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS inventory (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -154,7 +185,32 @@ def init_db():
                 hamali REAL DEFAULT 0.0,
                 remote_commission REAL DEFAULT 0.0,
                 advance REAL DEFAULT 0.0,
-                paid TEXT DEFAULT 'NO'
+                paid TEXT DEFAULT 'NO',
+                confirmed INTEGER DEFAULT 0
+            )
+        ''')
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS sold_data (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                date TEXT,
+                name TEXT,
+                sold_to TEXT,
+                no_of_bags INTEGER DEFAULT 0,
+                hamali_per_bag REAL DEFAULT 0.0,
+                party_commission TEXT,
+                lorry_no TEXT,
+                lorry_charges REAL DEFAULT 0.0,
+                tons REAL DEFAULT 0.0,
+                enam TEXT,
+                lorry_advance REAL DEFAULT 0.0,
+                village_ref TEXT
+            )
+        ''')
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS kisans (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT,
+                mobile TEXT
             )
         ''')
         cursor.execute('''
@@ -181,13 +237,36 @@ def init_db():
                 mobile TEXT
             )
         ''')
-        # Migration for time column if inventory table already exists
-        try:
-            cursor.execute("ALTER TABLE inventory ADD COLUMN time TEXT")
-        except sqlite3.OperationalError:
-            pass
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS sms_logs (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                date TEXT,
+                mobile TEXT,
+                message TEXT,
+                status TEXT DEFAULT 'SENT'
+            )
+        ''')
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS bags_config (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                bag_type TEXT,
+                capacity TEXT
+            )
+        ''')
 
-        cursor.execute("UPDATE inventory SET time = '11:35 PM' WHERE time IS NULL OR time = ''")
+        # Migrations for existing database
+        for alter in [
+            "ALTER TABLE user ADD COLUMN email TEXT",
+            "ALTER TABLE user ADD COLUMN address TEXT",
+            "ALTER TABLE inventory ADD COLUMN time TEXT",
+            "ALTER TABLE inventory ADD COLUMN confirmed INTEGER DEFAULT 0"
+        ]:
+            try:
+                cursor.execute(alter)
+            except sqlite3.OperationalError:
+                pass
+
+        cursor.execute("UPDATE inventory SET time = '12:00 PM' WHERE time IS NULL OR time = ''")
 
         # Seed default Admin
         cursor.execute("SELECT * FROM user WHERE user_name = 'admin'")

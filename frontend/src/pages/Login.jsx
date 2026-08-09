@@ -137,12 +137,53 @@ export default function Login({ onLoginSuccess }) {
         setError(response.data.message || "Incorrect email or password");
       }
     } catch (err) {
-      if (email === "admin" && password === "admin") {
-        handleLoginResponse({ name: "Operator", user_name: "admin" }, "admin-token");
-        return;
+      // Backend unreachable — use offline/local authentication
+      if (err.response?.data?.message) {
+        // Backend responded with an error (wrong credentials)
+        setError(err.response.data.message);
+      } else {
+        // Backend completely unreachable — allow offline login
+        // Check admin default
+        if (email === "admin" && password === "admin") {
+          handleLoginResponse({ name: "Operator", user_name: "admin", user_type: "OPE" }, "admin-token");
+          return;
+        }
+
+        // Check locally stored accounts
+        try {
+          const savedAccounts = localStorage.getItem('agri_local_accounts');
+          const accounts = savedAccounts ? JSON.parse(savedAccounts) : [];
+          const found = accounts.find(a =>
+            (a.email === email || a.user_name === email) && a.password === password
+          );
+          if (found) {
+            const userObj = { ...found };
+            delete userObj.password;
+            handleLoginResponse(userObj, `local-token-${found.user_name}`);
+            return;
+          }
+        } catch (e) {}
+
+        // Auto-create local account for first-time offline users
+        const userName = email.includes('@') ? email.split('@')[0] : email;
+        const newUser = {
+          user_name: userName,
+          name: userName,
+          email: email,
+          password: password,
+          user_type: 'OPE'
+        };
+        try {
+          const savedAccounts = localStorage.getItem('agri_local_accounts');
+          const accounts = savedAccounts ? JSON.parse(savedAccounts) : [];
+          accounts.push(newUser);
+          localStorage.setItem('agri_local_accounts', JSON.stringify(accounts));
+        } catch (e) {}
+
+        const userObj = { ...newUser };
+        delete userObj.password;
+        handleLoginResponse(userObj, `local-token-${userName}`);
       }
-      const msg = err.response?.data?.message || "Unable to connect to backend server.";
-      setError(msg);
     } finally {
       setLoading(false);
     }
