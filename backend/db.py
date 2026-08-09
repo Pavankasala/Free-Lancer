@@ -155,17 +155,39 @@ def init_db():
                 capacity VARCHAR(50)
             );
         ''')
+
+        # PostgreSQL Column Migrations for pre-existing tables
+        pg_alters = [
+            "ALTER TABLE \"user\" ADD COLUMN IF NOT EXISTS email VARCHAR(255)",
+            "ALTER TABLE \"user\" ADD COLUMN IF NOT EXISTS address TEXT",
+            "ALTER TABLE \"user\" ADD COLUMN IF NOT EXISTS auth_provider VARCHAR(50) DEFAULT 'LOCAL'",
+            "ALTER TABLE inventory ADD COLUMN IF NOT EXISTS user_id INT",
+            "ALTER TABLE inventory ADD COLUMN IF NOT EXISTS time VARCHAR(50)",
+            "ALTER TABLE inventory ADD COLUMN IF NOT EXISTS confirmed BOOLEAN DEFAULT FALSE",
+            "ALTER TABLE sold_data ADD COLUMN IF NOT EXISTS user_id INT",
+            "ALTER TABLE expenditures ADD COLUMN IF NOT EXISTS user_id INT",
+            "ALTER TABLE cash_collection ADD COLUMN IF NOT EXISTS user_id INT"
+        ]
+        for alter in pg_alters:
+            try:
+                cursor.execute(alter)
+            except Exception:
+                pass
+        conn.commit()
         
         # Seed default Admin user if not exists
-        cursor.execute("SELECT * FROM \"user\" WHERE LOWER(user_name) = 'admin' OR LOWER(email) = 'admin@agricommission.com'")
-        if not cursor.fetchone():
-            pwd_hash = hashlib.md5("admin".encode()).hexdigest()
-            cursor.execute('''
-                INSERT INTO "user" (user_name, email, password, user_type, name, company_name, company_full_name, mobile, commission, default_hamali, license_expires_on)
-                VALUES ('admin', 'admin@agricommission.com', %s, 'OPE', 'Operator', 'S.L.C Lemon Company', 'Lemon & Fruit Exports Commission Agent', '9866123445', 5.0, 10.0, '2030-12-31')
-            ''', (pwd_hash,))
+        try:
+            cursor.execute("SELECT * FROM \"user\" WHERE LOWER(user_name) = 'admin' OR (email IS NOT NULL AND LOWER(email) = 'admin@agricommission.com')")
+            if not cursor.fetchone():
+                pwd_hash = hashlib.md5("admin".encode()).hexdigest()
+                cursor.execute('''
+                    INSERT INTO "user" (user_name, email, password, user_type, name, company_name, company_full_name, mobile, commission, default_hamali, license_expires_on)
+                    VALUES ('admin', 'admin@agricommission.com', %s, 'OPE', 'Operator', 'S.L.C Lemon Company', 'Lemon & Fruit Exports Commission Agent', '9866123445', 5.0, 10.0, '2030-12-31')
+                ''', (pwd_hash,))
+            conn.commit()
+        except Exception:
+            pass
 
-        conn.commit()
         conn.close()
     else:
         # SQLite Schema
@@ -305,7 +327,7 @@ def init_db():
         cursor.execute("UPDATE inventory SET time = '12:00 PM' WHERE time IS NULL OR time = ''")
 
         # Seed default Admin
-        cursor.execute("SELECT * FROM user WHERE LOWER(user_name) = 'admin' OR LOWER(email) = 'admin@agricommission.com'")
+        cursor.execute("SELECT * FROM user WHERE LOWER(user_name) = 'admin' OR (email IS NOT NULL AND LOWER(email) = 'admin@agricommission.com')")
         if not cursor.fetchone():
             pwd_hash = hashlib.md5("admin".encode()).hexdigest()
             cursor.execute('''

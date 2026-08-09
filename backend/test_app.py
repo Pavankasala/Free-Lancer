@@ -1,6 +1,7 @@
 import unittest
 import json
 import os
+import time
 import db
 import app as flask_app
 
@@ -165,20 +166,21 @@ class AgriCommissionManagerTestCase(unittest.TestCase):
         self.assertIn('sms_list', data)
 
     def test_10_account_linking_google_oauth_and_email_password(self):
+        test_email = f"user_{int(time.time())}@example.com"
         # Step A: Signup via Email/Password
         signup_res = self.client.post('/api/signup', json={
-            'name': 'Supriya Garapati',
-            'email': 'garapatisupriya26@gmail.com',
+            'name': 'Test User',
+            'email': test_email,
             'password': 'mypassword123'
         })
         signup_data = json.loads(signup_res.data)
         self.assertEqual(signup_res.status_code, 201)
         original_user_id = signup_data['user']['user_id']
 
-        # Step B: Sign in via Google OAuth using UPPERCASE/MixedCase email
+        # Step B: Sign in via Google OAuth using UPPERCASE/MixedCase version of the exact same email
         google_res = self.client.post('/api/google-auth', json={
-            'name': 'Supriya Garapati',
-            'email': 'GarapatiSupriya26@gmail.com'
+            'name': 'Test User',
+            'email': test_email.upper()
         })
         google_data = json.loads(google_res.data)
         self.assertEqual(google_res.status_code, 200)
@@ -186,7 +188,7 @@ class AgriCommissionManagerTestCase(unittest.TestCase):
         # Step C: VERIFY strictly unified user_id across sign-in methods!
         linked_user_id = google_data['user']['user_id']
         self.assertEqual(original_user_id, linked_user_id)
-        self.assertEqual(google_data['user']['email'], 'garapatisupriya26@gmail.com')
+        self.assertEqual(google_data['user']['email'], test_email.lower())
 
 if __name__ == '__main__':
     unittest.main()
