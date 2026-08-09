@@ -1,6 +1,6 @@
 // Centralized API Base URL configuration
-// Dynamically reads VITE_API_BASE_URL environment variable without hardcoded localhost fallbacks
-export const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || '').replace(/\/+$/, '');
+// Reads VITE_API_BASE_URL or defaults to your live deployed Render backend
+export const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || 'https://agri-commission-manager.onrender.com').replace(/\/+$/, '');
 
 export const API_ENDPOINTS = {
   LOGIN: `${API_BASE_URL}/api/login`,
