@@ -59,7 +59,6 @@ export default function Signup({ onLoginSuccess }) {
         setError(response.data.message || "Signup failed");
       }
     } catch (err) {
-      const msg = err.response?.data?.message || "Unable to connect to server. Account created locally.";
       handleSignupSuccess({ name, email });
     } finally {
       setLoading(false);
@@ -126,7 +125,6 @@ export default function Signup({ onLoginSuccess }) {
                   placeholder="John Doe"
                   value={name}
                   onChange={(e) => setName(e.target.value)}
-                  autoFocus
                 />
               </div>
 

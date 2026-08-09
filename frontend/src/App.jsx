@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
-import Login from './login';
-import Signup from './signup';
+import Login from './pages/Login';
+import Signup from './pages/Signup';
 import Home from './pages/Home';
 import BuyersDetails from './pages/BuyersDetails';
 import Expenditures from './pages/Expenditures';
