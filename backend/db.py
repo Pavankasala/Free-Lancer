@@ -7,6 +7,15 @@ load_dotenv()
 
 DATABASE_URL = os.environ.get('DATABASE_URL')
 
+# Try top-level database driver import for PostgreSQL
+psycopg2 = None
+psycopg2_extras = None
+try:
+    import psycopg2
+    import psycopg2.extras as psycopg2_extras
+except ImportError:
+    pass
+
 def get_db():
     if DATABASE_URL:
         # Enforce sslmode=require for Neon PostgreSQL connection pooler if missing
@@ -14,16 +23,13 @@ def get_db():
         if 'sslmode' not in conn_str and 'localhost' not in conn_str and '127.0.0.1' not in conn_str:
             conn_str += '?sslmode=require' if '?' not in conn_str else '&sslmode=require'
 
-        try:
-            import psycopg2
-            import psycopg2.extras
-            conn = psycopg2.connect(conn_str, cursor_factory=psycopg2.extras.RealDictCursor)
-            return conn
-        except ImportError:
-            import psycopg
-            from psycopg.rows import dict_row
-            conn = psycopg.connect(conn_str, row_factory=dict_row)
-            return conn
+        if psycopg2 and psycopg2_extras:
+            return psycopg2.connect(conn_str, cursor_factory=psycopg2_extras.RealDictCursor)
+        else:
+            # Fallback import if psycopg2 imported dynamically
+            import psycopg2 as pg_driver
+            import psycopg2.extras as pg_extras
+            return pg_driver.connect(conn_str, cursor_factory=pg_extras.RealDictCursor)
     else:
         # Local SQLite database
         conn = sqlite3.connect(os.path.join(os.path.dirname(__file__), 'lemons.db'))
@@ -249,7 +255,7 @@ def init_db():
                 lorry_charges REAL DEFAULT 0.0,
                 tons REAL DEFAULT 0.0,
                 enam TEXT,
-                lorry_advance REAL DEFAULT 0.0,
+                lorry_advance TEXT DEFAULT 0.0,
                 village_ref TEXT
             )
         ''')
@@ -340,4 +346,4 @@ def init_db():
 
 if __name__ == '__main__':
     init_db()
-    print("Database initialized successfully with unified user schemas!")
+    print("Database initialized successfully with clean imports!")
