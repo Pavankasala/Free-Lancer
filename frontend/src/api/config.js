@@ -1,5 +1,20 @@
 // Centralized API Base URL configuration for Development and Production environments
-export const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:5000';
+const rawEnvUrl = import.meta.env.VITE_API_BASE_URL;
+
+export const getApiBaseUrl = () => {
+  if (rawEnvUrl && rawEnvUrl !== 'http://127.0.0.1:5000' && rawEnvUrl !== 'http://localhost:5000') {
+    return rawEnvUrl;
+  }
+  if (typeof window !== 'undefined') {
+    const isLocalHost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+    if (isLocalHost) {
+      return 'http://127.0.0.1:5000';
+    }
+  }
+  return rawEnvUrl || '';
+};
+
+export const API_BASE_URL = getApiBaseUrl();
 
 export const API_ENDPOINTS = {
   LOGIN: `${API_BASE_URL}/api/login`,
