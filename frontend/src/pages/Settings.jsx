@@ -4,10 +4,10 @@ import axios from 'axios';
 import { API_BASE_URL } from '../api/config';
 
 export default function Settings({ user, onLogout, onUpdateUser }) {
-  const [businessName, setBusinessName] = useState(user?.business_name || user?.company_full_name || 'Lemon & Fruit Exports Commission Agent');
-  const [ownerName, setOwnerName] = useState(user?.owner_name || user?.name || 'B. Anjaiah');
-  const [phone, setPhone] = useState(user?.phone || user?.mobile || '9866123445');
-  const [address, setAddress] = useState(user?.address || 'MAINROAD, NAKREKAL');
+  const [businessName, setBusinessName] = useState(user?.business_name || user?.company_full_name || 'Agri Commission Manager');
+  const [ownerName, setOwnerName] = useState(user?.owner_name || user?.name || '');
+  const [phone, setPhone] = useState(user?.phone || user?.mobile || '');
+  const [address, setAddress] = useState(user?.address || '');
   const [defaultHamali, setDefaultHamali] = useState(user?.default_hamali || 0);
   const [message, setMessage] = useState('');
   const [loading, setLoading] = useState(false);
@@ -61,8 +61,8 @@ export default function Settings({ user, onLogout, onUpdateUser }) {
     <div>
       <Header user={user} onLogout={onLogout} />
       <br />
-      <form onSubmit={handleSave}>
-        <table width="60%" className="tab" align="center" style={{ backgroundColor: '#ffffff', borderRadius: '8px', boxShadow: '0 2px 8px rgba(0,0,0,0.1)', padding: '10px' }}>
+      <form onSubmit={handleSave} style={{ padding: '0 10px' }}>
+        <table width="100%" className="tab" align="center" style={{ maxWidth: '600px', backgroundColor: '#ffffff', borderRadius: '8px', boxShadow: '0 2px 8px rgba(0,0,0,0.1)', padding: '10px' }}>
           <tbody>
             <tr>
               <th colSpan="2" style={{ backgroundColor: '#4286f4', color: 'white', padding: '12px' }}>
@@ -99,6 +99,7 @@ export default function Settings({ user, onLogout, onUpdateUser }) {
                   value={ownerName}
                   onChange={(e) => setOwnerName(e.target.value)}
                   style={{ width: '90%', padding: '8px', fontSize: '14px' }}
+                  placeholder="e.g. John Doe"
                   required
                 />
               </td>
@@ -112,6 +113,7 @@ export default function Settings({ user, onLogout, onUpdateUser }) {
                   value={phone}
                   onChange={(e) => setPhone(e.target.value)}
                   style={{ width: '90%', padding: '8px', fontSize: '14px' }}
+                  placeholder="e.g. 9800000000"
                   required
                 />
               </td>
@@ -125,7 +127,7 @@ export default function Settings({ user, onLogout, onUpdateUser }) {
                   value={address}
                   onChange={(e) => setAddress(e.target.value)}
                   style={{ width: '90%', padding: '8px', fontSize: '14px' }}
-                  placeholder="e.g. MAINROAD, NAKREKAL"
+                  placeholder="e.g. Market Road, City"
                   required
                 />
               </td>

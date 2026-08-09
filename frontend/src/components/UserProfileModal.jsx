@@ -12,6 +12,11 @@ export default function UserProfileModal({ isOpen, onClose, user, onSaveSuccess 
 
   if (!isOpen) return null;
 
+  const markShownAndClose = () => {
+    localStorage.setItem('agri_profile_modal_shown', 'true');
+    onClose();
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!ownerName) {
@@ -55,11 +60,11 @@ export default function UserProfileModal({ isOpen, onClose, user, onSaveSuccess 
       const finalUser = res.data?.user ? { ...updatedUser, ...res.data.user } : updatedUser;
       localStorage.setItem('user', JSON.stringify(finalUser));
       if (onSaveSuccess) onSaveSuccess(finalUser);
-      onClose();
+      markShownAndClose();
     } catch (err) {
       localStorage.setItem('user', JSON.stringify(updatedUser));
       if (onSaveSuccess) onSaveSuccess(updatedUser);
-      onClose();
+      markShownAndClose();
     } finally {
       setLoading(false);
     }
@@ -100,7 +105,7 @@ export default function UserProfileModal({ isOpen, onClose, user, onSaveSuccess 
             <h3 style={{ margin: 0, fontSize: '18px', fontWeight: 'bold' }}>Welcome! Set Up Your Profile</h3>
             <p style={{ margin: 0, fontSize: '13px', opacity: 0.9 }}>Enter your shop, name, phone & address</p>
           </div>
-          <button onClick={onClose} style={{ background: 'none', border: 'none', color: 'white', fontSize: '22px', cursor: 'pointer' }}>&times;</button>
+          <button onClick={markShownAndClose} style={{ background: 'none', border: 'none', color: 'white', fontSize: '22px', cursor: 'pointer' }}>&times;</button>
         </div>
 
         <form onSubmit={handleSubmit} style={{ padding: '24px' }}>
@@ -132,7 +137,7 @@ export default function UserProfileModal({ isOpen, onClose, user, onSaveSuccess 
               type="text"
               value={ownerName}
               onChange={(e) => setOwnerName(e.target.value)}
-              placeholder="e.g. B. Anjaiah"
+              placeholder="e.g. John Doe"
               style={{ width: '100%', padding: '10px', borderRadius: '6px', border: '1px solid #cbd5e1', boxSizing: 'border-box' }}
               required
             />
@@ -146,7 +151,7 @@ export default function UserProfileModal({ isOpen, onClose, user, onSaveSuccess 
               type="text"
               value={phone}
               onChange={(e) => setPhone(e.target.value)}
-              placeholder="e.g. 9866123445"
+              placeholder="e.g. 9800000000"
               style={{ width: '100%', padding: '10px', borderRadius: '6px', border: '1px solid #cbd5e1', boxSizing: 'border-box' }}
               required
             />
@@ -160,7 +165,7 @@ export default function UserProfileModal({ isOpen, onClose, user, onSaveSuccess 
               type="text"
               value={address}
               onChange={(e) => setAddress(e.target.value)}
-              placeholder="e.g. MAINROAD, NAKREKAL"
+              placeholder="e.g. Market Road, City"
               style={{ width: '100%', padding: '10px', borderRadius: '6px', border: '1px solid #cbd5e1', boxSizing: 'border-box' }}
               required
             />
@@ -169,7 +174,7 @@ export default function UserProfileModal({ isOpen, onClose, user, onSaveSuccess 
           <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
             <button
               type="button"
-              onClick={onClose}
+              onClick={markShownAndClose}
               style={{ padding: '10px 16px', backgroundColor: '#f1f5f9', color: '#475569', border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold' }}
             >
               Skip for Now

@@ -12,9 +12,9 @@ export default function Header({ user, onLogout }) {
   };
 
   const businessName = user?.business_name || user?.company_full_name || user?.company_name || 'Agri Commission Manager';
-  const address = user?.address || 'MAINROAD, NAKREKAL';
-  const ownerName = user?.owner_name || user?.name || 'B. Anjaiah';
-  const phone = user?.phone || user?.mobile || '9866123445';
+  const address = user?.address || '';
+  const ownerName = user?.owner_name || user?.name || 'Operator';
+  const phone = user?.phone || user?.mobile || '';
 
   const navLinks = [
     { path: '/home', label: 'Home' },
@@ -36,35 +36,50 @@ export default function Header({ user, onLogout }) {
   ];
 
   return (
-    <header>
-      <h2 style={{ color: 'white', backgroundColor: '#4286f4', textAlign: 'center', padding: '0px', margin: 0, fontFamily: "'Times New Roman', Times, serif" }}>
-        <Link to="/home" style={{ color: 'white', textDecoration: 'underline', fontSize: '26px' }}>
-          <u>Agri Commission Manager</u>
-        </Link>
-        <a href="#logout" onClick={handleLogout} style={{ float: 'right', color: 'white', textDecoration: 'none', paddingRight: '15px' }}>
-          <b><u>Logout</u></b>
+    <header style={{ backgroundColor: '#4286f4', color: 'white', padding: '6px 12px' }}>
+      <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'space-between', alignItems: 'center' }}>
+        <h2 style={{ margin: 0, fontFamily: "'Times New Roman', Times, serif" }}>
+          <Link to="/home" style={{ color: 'white', textDecoration: 'none', fontSize: '24px', fontWeight: 'bold' }}>
+            {businessName}
+          </Link>
+        </h2>
+        <a href="#logout" onClick={handleLogout} style={{ color: 'white', textDecoration: 'underline', fontSize: '15px', fontWeight: 'bold' }}>
+          Logout
         </a>
-        <p style={{ margin: '4px 0', fontSize: '13px', fontWeight: 'normal' }}>
-          {businessName} {address} {ownerName} {phone}&nbsp;&nbsp;&nbsp;&nbsp;
-          [<font color="yellow">{user?.user_name || user?.role || 'Operator'}</font>]&nbsp;&nbsp;&nbsp;&nbsp;
-          <Link to="/bags" style={{ color: 'yellow' }}>Bags</Link>&nbsp;&nbsp;&nbsp;&nbsp;
-          <Link to="/settings" style={{ color: 'pink' }}>Settings</Link>&nbsp;&nbsp;&nbsp;&nbsp;
-          <Link to="/kisans" style={{ color: 'pink' }}>Kisan Data</Link>
-        </p>
-      </h2>
+      </div>
 
-      <ul>
-        {navLinks.map((link) => (
-          <li key={link.path}>
-            <Link
-              to={link.path}
-              className={location.pathname === link.path ? 'active' : ''}
-            >
-              {link.label}
-            </Link>
-          </li>
-        ))}
-      </ul>
+      <p style={{ margin: '6px 0', fontSize: '13px', fontWeight: 'normal', textAlign: 'center', opacity: 0.95 }}>
+        {[businessName, address, ownerName, phone].filter(Boolean).join(' | ')}
+        &nbsp;&nbsp;&nbsp;&nbsp;
+        [<font color="yellow">{user?.user_name || user?.role || 'Operator'}</font>]&nbsp;&nbsp;&nbsp;&nbsp;
+        <Link to="/bags" style={{ color: 'yellow', textDecoration: 'underline' }}>Bags</Link>&nbsp;&nbsp;&nbsp;&nbsp;
+        <Link to="/settings" style={{ color: 'pink', textDecoration: 'underline' }}>Settings</Link>&nbsp;&nbsp;&nbsp;&nbsp;
+        <Link to="/kisans" style={{ color: 'pink', textDecoration: 'underline' }}>Kisan Data</Link>
+      </p>
+
+      <nav style={{ marginTop: '6px' }}>
+        <ul style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'center', gap: '6px', margin: 0, padding: 0, listStyle: 'none' }}>
+          {navLinks.map((link) => (
+            <li key={link.path}>
+              <Link
+                to={link.path}
+                className={location.pathname === link.path ? 'active' : ''}
+                style={{
+                  color: 'white',
+                  textDecoration: 'none',
+                  padding: '4px 8px',
+                  borderRadius: '4px',
+                  fontSize: '13px',
+                  backgroundColor: location.pathname === link.path ? '#1d4ed8' : 'transparent',
+                  display: 'inline-block'
+                }}
+              >
+                {link.label}
+              </Link>
+            </li>
+          ))}
+        </ul>
+      </nav>
     </header>
   );
 }
