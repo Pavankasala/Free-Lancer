@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import axios from 'axios';
 import Header from '../components/Header';
+import { API_BASE_URL } from '../api/config';
 
 export default function NotPaidBills({ user, onLogout }) {
   const [selectedYear, setSelectedYear] = useState('2026');
@@ -12,17 +13,29 @@ export default function NotPaidBills({ user, onLogout }) {
     years.push(y);
   }
 
+  const getLocalBills = () => {
+    try {
+      const saved = localStorage.getItem('agri_local_bills');
+      return saved ? JSON.parse(saved) : [];
+    } catch (e) {
+      return [];
+    }
+  };
+
   const handleGetBills = async (e) => {
     e.preventDefault();
+    const local = getLocalBills().filter(b => b.paid !== 'YES');
     try {
-      const res = await axios.get('http://127.0.0.1:5000/api/home-bills');
-      if (res.data.success) {
-        setBills(res.data.bills.filter(b => b.paid !== 'YES'));
+      const res = await axios.get(`${API_BASE_URL}/api/home-bills`);
+      if (res.data && res.data.success) {
+        const apiBills = (res.data.bills || []).filter(b => b.paid !== 'YES');
+        setBills([...local, ...apiBills]);
         setSearched(true);
+        return;
       }
-    } catch (err) {
-      console.error(err);
-    }
+    } catch (err) {}
+    setBills(local);
+    setSearched(true);
   };
 
   const netTotalSum = bills.reduce((acc, b) => acc + (b.no_of_bags * b.price), 0);

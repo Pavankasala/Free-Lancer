@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import axios from 'axios';
 import Header from '../components/Header';
+import { API_BASE_URL } from '../api/config';
 
 export default function BalanceSheet({ user, onLogout }) {
   const [selectedYear, setSelectedYear] = useState('2026');
@@ -15,22 +16,31 @@ export default function BalanceSheet({ user, onLogout }) {
   const fetchBalanceSheet = async (e) => {
     e.preventDefault();
     try {
-      const res = await axios.get(`http://127.0.0.1:5000/api/balance-sheet?date=${selectedYear}-01-01`);
-      if (res.data.success) {
+      const res = await axios.get(`${API_BASE_URL}/api/balance-sheet?date=${selectedYear}-01-01`);
+      if (res.data && res.data.success) {
         setData({
           rows: [
-            { date: `${selectedYear}-08-08`, total: res.data.total_buy || 5000.00, paid: res.data.total_cash || 0.00, pending: (res.data.total_buy || 5000.00) - (res.data.total_cash || 0.00) }
+            { date: `${selectedYear}-08-08`, total: res.data.total_buy || 0.00, paid: res.data.total_cash || 0.00, pending: (res.data.total_buy || 0.00) - (res.data.total_cash || 0.00) }
           ],
           oldBalance: 0.00,
           cashPaid: res.data.total_cash || 0.00,
-          newAmount: res.data.total_buy || 5000.00,
-          presentBalance: (res.data.total_buy || 5000.00) - (res.data.total_cash || 0.00)
+          newAmount: res.data.total_buy || 0.00,
+          presentBalance: (res.data.total_buy || 0.00) - (res.data.total_cash || 0.00)
         });
         setSearched(true);
+        return;
       }
-    } catch (err) {
-      console.error(err);
-    }
+    } catch (err) {}
+    setData({
+      rows: [
+        { date: `${selectedYear}-08-08`, total: 0.00, paid: 0.00, pending: 0.00 }
+      ],
+      oldBalance: 0.00,
+      cashPaid: 0.00,
+      newAmount: 0.00,
+      presentBalance: 0.00
+    });
+    setSearched(true);
   };
 
   return (

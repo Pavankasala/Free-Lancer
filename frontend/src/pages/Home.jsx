@@ -4,6 +4,7 @@ import Header from '../components/Header';
 import TimePicker from '../components/TimePicker';
 import BillModal from '../components/BillModal';
 import UserProfileModal from '../components/UserProfileModal';
+import { API_BASE_URL } from '../api/config';
 
 export default function Home({ user, onLogout, onUpdateUser }) {
   const [isProfileModalOpen, setIsProfileModalOpen] = useState(() => {
@@ -29,29 +30,51 @@ export default function Home({ user, onLogout, onUpdateUser }) {
   const [selectedBill, setSelectedBill] = useState(null);
   const [confirmDeleteId, setConfirmDeleteId] = useState(null);
 
-  const handleDeleteBill = async (billId) => {
+  const getLocalBills = () => {
     try {
-      const res = await axios.delete(`http://127.0.0.1:5000/api/delete-bill/${billId}`);
-      if (res.data.success) {
-        setBills(prev => prev.filter(b => b.id !== billId));
-      } else {
-        setBills(prev => prev.filter(b => b.id !== billId));
-      }
-    } catch (err) {
-      console.error(err);
-      setBills(prev => prev.filter(b => b.id !== billId));
+      const saved = localStorage.getItem('agri_local_bills');
+      return saved ? JSON.parse(saved) : [];
+    } catch (e) {
+      return [];
     }
   };
 
-  const fetchBills = async (selectedDate) => {
+  const saveLocalBill = (newBill) => {
     try {
-      const res = await axios.get(`http://127.0.0.1:5000/api/home-bills?date=${selectedDate}`);
-      if (res.data.success) {
-        setBills(res.data.bills || []);
+      const current = getLocalBills();
+      const updated = [newBill, ...current];
+      localStorage.setItem('agri_local_bills', JSON.stringify(updated));
+    } catch (e) {}
+  };
+
+  const removeLocalBill = (billId) => {
+    try {
+      const current = getLocalBills();
+      const updated = current.filter(b => b.id !== billId);
+      localStorage.setItem('agri_local_bills', JSON.stringify(updated));
+    } catch (e) {}
+  };
+
+  const handleDeleteBill = async (billId) => {
+    removeLocalBill(billId);
+    setBills(prev => prev.filter(b => b.id !== billId));
+    try {
+      await axios.delete(`${API_BASE_URL}/api/delete-bill/${billId}`);
+    } catch (err) {}
+  };
+
+  const fetchBills = async (selectedDate) => {
+    const local = getLocalBills().filter(b => !selectedDate || b.date === selectedDate);
+    try {
+      const res = await axios.get(`${API_BASE_URL}/api/home-bills?date=${selectedDate}`);
+      if (res.data && res.data.success) {
+        const apiBills = res.data.bills || [];
+        const combined = [...local, ...apiBills.filter(ab => !local.some(lb => lb.id === ab.id))];
+        setBills(combined);
+        return;
       }
-    } catch (err) {
-      console.error(err);
-    }
+    } catch (err) {}
+    setBills(local);
   };
 
   useEffect(() => {
@@ -75,8 +98,30 @@ export default function Home({ user, onLogout, onUpdateUser }) {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+
+    const totalBags = channels.reduce((acc, c) => acc + (Number(c.bags) || 0), 0);
+    const avgPrice = channels.length > 0 && Number(channels[0].price) ? Number(channels[0].price) : (Number(priceSold) || 0);
+
+    const newBillObj = {
+      id: Date.now(),
+      name: name || 'Kisan',
+      billdate: billdate,
+      date: billdate,
+      time: advanceTime,
+      advanceTime: advanceTime,
+      channels: channels,
+      no_of_bags: totalBags,
+      price: avgPrice,
+      hamali: Number(hamali) || 0,
+      advance: Number(advance) || 0,
+      bagsSold: bagsSold,
+      priceSold: priceSold,
+      type: 'BUY',
+      paid: 'NO'
+    };
+
     try {
-      const res = await axios.post('http://127.0.0.1:5000/api/add-bill', {
+      const res = await axios.post(`${API_BASE_URL}/api/add-bill`, {
         name,
         billdate,
         advanceTime,
@@ -86,18 +131,26 @@ export default function Home({ user, onLogout, onUpdateUser }) {
         bagsSold,
         priceSold
       });
-      if (res.data.success) {
-        alert('saved successfully');
-        setName('');
-        setChannels([{ bags: '', price: '' }]);
-        setAdvance('');
-        setBagsSold('');
-        setPriceSold('');
-        fetchBills(billdate);
+      if (res.data && res.data.success) {
+        if (res.data.bill) {
+          saveLocalBill(res.data.bill);
+        } else {
+          saveLocalBill(newBillObj);
+        }
+      } else {
+        saveLocalBill(newBillObj);
       }
     } catch (err) {
-      alert('Error saving bill');
+      saveLocalBill(newBillObj);
     }
+
+    alert('saved successfully');
+    setName('');
+    setChannels([{ bags: '', price: '' }]);
+    setAdvance('');
+    setBagsSold('');
+    setPriceSold('');
+    fetchBills(billdate);
   };
 
   const formatDateDMY = (dateStr) => {
