@@ -18,13 +18,14 @@ export default function BalanceSheet({ user, onLogout }) {
     try {
       const res = await axios.get(`${API_BASE_URL}/api/buyer-balance?year=${selectedYear}`);
       if (res.data && res.data.success) {
-        const rows = (res.data.buyers || []).map(b => ({
+        const recordsList = res.data.records || res.data.buyers || [];
+        const rows = recordsList.map(b => ({
           date: b.date || `${selectedYear}-01-01`,
-          buyerName: b.name || b.sold_to || 'Buyer',
-          bags: b.no_of_bags || 0,
-          total: b.total_amount || 0,
-          paid: b.paid_amount || 0,
-          pending: b.pending_amount || 0
+          buyerName: b.name || b.buyerName || b.sold_to || 'Buyer',
+          bags: b.no_of_bags || b.bags || 0,
+          total: b.total_amount || b.total || 0,
+          paid: b.cash_paid !== undefined ? b.cash_paid : (b.paid_amount || b.paid || 0),
+          pending: b.pending_balance !== undefined ? b.pending_balance : (b.pending_amount || b.pending || 0)
         }));
         const summary = res.data.summary || {};
         setData({
@@ -32,13 +33,14 @@ export default function BalanceSheet({ user, onLogout }) {
             { date: `${selectedYear}-01-01`, buyerName: 'No Buyer Bills', bags: 0, total: 0.00, paid: 0.00, pending: 0.00 }
           ],
           oldBalance: 0.00,
-          cashPaid: summary.paid_amount || 0,
+          cashPaid: summary.cash_paid !== undefined ? summary.cash_paid : (summary.paid_amount || 0),
           newAmount: summary.total_amount || 0,
-          presentBalance: summary.pending_amount || 0
+          presentBalance: summary.pending_balance !== undefined ? summary.pending_balance : (summary.pending_amount || 0)
         });
         setSearched(true);
         return;
       }
+
     } catch (err) {}
 
     setData({
