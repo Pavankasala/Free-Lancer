@@ -26,9 +26,20 @@ import BuyerBalance from './pages/BuyerBalance';
 
 export default function App() {
   const [user, setUser] = useState(() => {
-    const saved = localStorage.getItem('user');
-    return saved ? JSON.parse(saved) : null;
+    try {
+      const token = localStorage.getItem('token');
+      const saved = localStorage.getItem('user');
+      if (!token || !token.trim() || !saved) {
+        return null;
+      }
+      const parsed = JSON.parse(saved);
+      return parsed && typeof parsed === 'object' ? parsed : null;
+    } catch (e) {
+      return null;
+    }
   });
+
+  const isAuthenticated = Boolean(user && localStorage.getItem('token'));
 
   const handleLoginSuccess = (userData) => {
     setUser(userData);
@@ -54,62 +65,63 @@ export default function App() {
         <Route path="/" element={<Login onLoginSuccess={handleLoginSuccess} />} />
         <Route path="/login" element={<Login onLoginSuccess={handleLoginSuccess} />} />
         <Route path="/signup" element={<Signup onLoginSuccess={handleLoginSuccess} />} />
-        <Route path="/home" element={user ? <Home user={user} onLogout={handleLogout} onUpdateUser={handleUpdateUser} /> : <Navigate to="/" />} />
+        <Route path="/home" element={isAuthenticated ? <Home user={user} onLogout={handleLogout} onUpdateUser={handleUpdateUser} /> : <Navigate to="/" />} />
         
         {/* Buyers Details */}
-        <Route path="/buyers-details" element={user ? <BuyersDetails user={user} onLogout={handleLogout} /> : <Navigate to="/" />} />
-        <Route path="/buyersDetails" element={user ? <BuyersDetails user={user} onLogout={handleLogout} /> : <Navigate to="/" />} />
-        <Route path="/sell" element={user ? <SoldData user={user} onLogout={handleLogout} /> : <Navigate to="/" />} />
-        <Route path="/sold-data" element={user ? <SoldData user={user} onLogout={handleLogout} /> : <Navigate to="/" />} />
+        <Route path="/buyers-details" element={isAuthenticated ? <BuyersDetails user={user} onLogout={handleLogout} /> : <Navigate to="/" />} />
+        <Route path="/buyersDetails" element={isAuthenticated ? <BuyersDetails user={user} onLogout={handleLogout} /> : <Navigate to="/" />} />
+        <Route path="/sell" element={isAuthenticated ? <SoldData user={user} onLogout={handleLogout} /> : <Navigate to="/" />} />
+        <Route path="/sold-data" element={isAuthenticated ? <SoldData user={user} onLogout={handleLogout} /> : <Navigate to="/" />} />
         
         {/* Expenditures */}
-        <Route path="/expenditures" element={user ? <Expenditures user={user} onLogout={handleLogout} /> : <Navigate to="/" />} />
+        <Route path="/expenditures" element={isAuthenticated ? <Expenditures user={user} onLogout={handleLogout} /> : <Navigate to="/" />} />
         
         {/* Cash Collection */}
-        <Route path="/cash-collection" element={user ? <CashCollection user={user} onLogout={handleLogout} /> : <Navigate to="/" />} />
-        <Route path="/cashCollection" element={user ? <CashCollection user={user} onLogout={handleLogout} /> : <Navigate to="/" />} />
-        <Route path="/cash" element={user ? <CashCollection user={user} onLogout={handleLogout} /> : <Navigate to="/" />} />
+        <Route path="/cash-collection" element={isAuthenticated ? <CashCollection user={user} onLogout={handleLogout} /> : <Navigate to="/" />} />
+        <Route path="/cashCollection" element={isAuthenticated ? <CashCollection user={user} onLogout={handleLogout} /> : <Navigate to="/" />} />
+        <Route path="/cash" element={isAuthenticated ? <CashCollection user={user} onLogout={handleLogout} /> : <Navigate to="/" />} />
         
         {/* Balance Sheet */}
-        <Route path="/balancesheet" element={user ? <BalanceSheet user={user} onLogout={handleLogout} /> : <Navigate to="/" />} />
-        <Route path="/balanceSheet" element={user ? <BalanceSheet user={user} onLogout={handleLogout} /> : <Navigate to="/" />} />
+        <Route path="/balancesheet" element={isAuthenticated ? <BalanceSheet user={user} onLogout={handleLogout} /> : <Navigate to="/" />} />
+        <Route path="/balanceSheet" element={isAuthenticated ? <BalanceSheet user={user} onLogout={handleLogout} /> : <Navigate to="/" />} />
         
         {/* SMS */}
-        <Route path="/sms" element={user ? <SMS user={user} onLogout={handleLogout} /> : <Navigate to="/" />} />
+        <Route path="/sms" element={isAuthenticated ? <SMS user={user} onLogout={handleLogout} /> : <Navigate to="/" />} />
         
         {/* Beat Paper */}
-        <Route path="/beatpaper" element={user ? <BeatPaper user={user} onLogout={handleLogout} /> : <Navigate to="/" />} />
-        <Route path="/beatPaper" element={user ? <BeatPaper user={user} onLogout={handleLogout} /> : <Navigate to="/" />} />
+        <Route path="/beatpaper" element={isAuthenticated ? <BeatPaper user={user} onLogout={handleLogout} /> : <Navigate to="/" />} />
+        <Route path="/beatPaper" element={isAuthenticated ? <BeatPaper user={user} onLogout={handleLogout} /> : <Navigate to="/" />} />
         
         {/* Local Sale */}
-        <Route path="/localSale" element={user ? <LocalSale user={user} onLogout={handleLogout} /> : <Navigate to="/" />} />
-        <Route path="/localsale" element={user ? <LocalSale user={user} onLogout={handleLogout} /> : <Navigate to="/" />} />
+        <Route path="/localSale" element={isAuthenticated ? <LocalSale user={user} onLogout={handleLogout} /> : <Navigate to="/" />} />
+        <Route path="/localsale" element={isAuthenticated ? <LocalSale user={user} onLogout={handleLogout} /> : <Navigate to="/" />} />
         
         {/* Kisan Balance & Buyer Balance */}
-        <Route path="/kisanbalance" element={user ? <KisanBalance user={user} onLogout={handleLogout} /> : <Navigate to="/" />} />
-        <Route path="/kisanBalance" element={user ? <KisanBalance user={user} onLogout={handleLogout} /> : <Navigate to="/" />} />
-        <Route path="/buyerbalance" element={user ? <BuyerBalance user={user} onLogout={handleLogout} /> : <Navigate to="/" />} />
-        <Route path="/buyers-balance" element={user ? <BuyerBalance user={user} onLogout={handleLogout} /> : <Navigate to="/" />} />
-        <Route path="/buyerBalance" element={user ? <BuyerBalance user={user} onLogout={handleLogout} /> : <Navigate to="/" />} />
+        <Route path="/kisanbalance" element={isAuthenticated ? <KisanBalance user={user} onLogout={handleLogout} /> : <Navigate to="/" />} />
+        <Route path="/kisanBalance" element={isAuthenticated ? <KisanBalance user={user} onLogout={handleLogout} /> : <Navigate to="/" />} />
+        <Route path="/buyerbalance" element={isAuthenticated ? <BuyerBalance user={user} onLogout={handleLogout} /> : <Navigate to="/" />} />
+        <Route path="/buyers-balance" element={isAuthenticated ? <BuyerBalance user={user} onLogout={handleLogout} /> : <Navigate to="/" />} />
+        <Route path="/buyerBalance" element={isAuthenticated ? <BuyerBalance user={user} onLogout={handleLogout} /> : <Navigate to="/" />} />
         
         {/* Not Paid / Paid Bills */}
-        <Route path="/notpaidbills" element={user ? <NotPaidBills user={user} onLogout={handleLogout} /> : <Navigate to="/" />} />
-        <Route path="/notPaidBills" element={user ? <NotPaidBills user={user} onLogout={handleLogout} /> : <Navigate to="/" />} />
-        <Route path="/paidBills" element={user ? <PaidBills user={user} onLogout={handleLogout} /> : <Navigate to="/" />} />
-        <Route path="/paidbills" element={user ? <PaidBills user={user} onLogout={handleLogout} /> : <Navigate to="/" />} />
+        <Route path="/notpaidbills" element={isAuthenticated ? <NotPaidBills user={user} onLogout={handleLogout} /> : <Navigate to="/" />} />
+        <Route path="/notPaidBills" element={isAuthenticated ? <NotPaidBills user={user} onLogout={handleLogout} /> : <Navigate to="/" />} />
+        <Route path="/paidBills" element={isAuthenticated ? <PaidBills user={user} onLogout={handleLogout} /> : <Navigate to="/" />} />
+        <Route path="/paidbills" element={isAuthenticated ? <PaidBills user={user} onLogout={handleLogout} /> : <Navigate to="/" />} />
         
         {/* Shops & Miscellaneous */}
-        <Route path="/shops" element={user ? <Shops user={user} onLogout={handleLogout} /> : <Navigate to="/" />} />
-        <Route path="/bags" element={user ? <Bags user={user} onLogout={handleLogout} /> : <Navigate to="/" />} />
-        <Route path="/settings" element={user ? <Settings user={user} onLogout={handleLogout} onUpdateUser={handleUpdateUser} /> : <Navigate to="/" />} />
-        <Route path="/kisans" element={user ? <Kisans user={user} onLogout={handleLogout} /> : <Navigate to="/" />} />
+        <Route path="/shops" element={isAuthenticated ? <Shops user={user} onLogout={handleLogout} /> : <Navigate to="/" />} />
+        <Route path="/bags" element={isAuthenticated ? <Bags user={user} onLogout={handleLogout} /> : <Navigate to="/" />} />
+        <Route path="/settings" element={isAuthenticated ? <Settings user={user} onLogout={handleLogout} onUpdateUser={handleUpdateUser} /> : <Navigate to="/" />} />
+        <Route path="/kisans" element={isAuthenticated ? <Kisans user={user} onLogout={handleLogout} /> : <Navigate to="/" />} />
 
         {/* Bills & Advance Dedicated Routes */}
-        <Route path="/bills" element={user ? <Bills user={user} onLogout={handleLogout} /> : <Navigate to="/" />} />
-        <Route path="/advance" element={user ? <Advance user={user} onLogout={handleLogout} /> : <Navigate to="/" />} />
+        <Route path="/bills" element={isAuthenticated ? <Bills user={user} onLogout={handleLogout} /> : <Navigate to="/" />} />
+        <Route path="/advance" element={isAuthenticated ? <Advance user={user} onLogout={handleLogout} /> : <Navigate to="/" />} />
         
         <Route path="*" element={<Navigate to="/" />} />
       </Routes>
     </BrowserRouter>
   );
 }
+
