@@ -1,5 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import axios from 'axios';
 import Header from '../components/Header';
+import { API_BASE_URL } from '../api/config';
 
 export default function Shops({ user, onLogout }) {
   const [billdate, setBilldate] = useState(new Date().toISOString().split('T')[0]);
@@ -21,30 +23,112 @@ export default function Shops({ user, onLogout }) {
     years.push(y);
   }
 
-  const handleAddShopBill = (e) => {
+  const fetchShopBillsByDate = async (selectedDate) => {
+    const targetDate = selectedDate || billdate1;
+    try {
+      const token = localStorage.getItem('token');
+      const res = await axios.get(`${API_BASE_URL}/api/shops?date=${targetDate}`, {
+        headers: token ? { Authorization: `Bearer ${token}` } : {}
+      });
+      if (res.data && res.data.success) {
+        const list = (res.data.shops || []).map(s => {
+          const bagsCount = Number(s.no_of_bags || s.bags || 0);
+          const priceVal = Number(s.price || 0);
+          return {
+            id: s.id,
+            name: s.name,
+            bags: bagsCount,
+            price: priceVal,
+            advance: Number(s.advance || 0),
+            total: bagsCount * priceVal,
+            date: s.date
+          };
+        });
+        setShopBills(list);
+        setShopBillsSearched(true);
+      }
+    } catch (err) {
+      setShopBills([]);
+      setShopBillsSearched(true);
+    }
+  };
+
+  useEffect(() => {
+    fetchShopBillsByDate(billdate1);
+  }, []);
+
+  const handleAddShopBill = async (e) => {
     e.preventDefault();
-    alert("Saved successfully!");
-    setName('');
-    setBags('');
-    setPrice('');
-    setAdvance('');
+    if (Number(bags) <= 0 || Number(price) < 0 || Number(advance) < 0) {
+      alert("Invalid input! Bags must be greater than zero, and Price/Advance cannot be negative.");
+      return;
+    }
+    try {
+      const token = localStorage.getItem('token');
+      const res = await axios.post(`${API_BASE_URL}/api/shops`, {
+        name: name,
+        bags: Number(bags),
+        price: Number(price),
+        advance: Number(advance) || 0,
+        date: billdate
+      }, {
+        headers: token ? { Authorization: `Bearer ${token}` } : {}
+      });
+
+      if (res.data && res.data.success) {
+        alert(res.data.message || "Saved successfully!");
+        setName('');
+        setBags('');
+        setPrice('');
+        setAdvance('');
+        fetchShopBillsByDate(billdate1);
+      } else {
+        alert(res.data?.message || "Failed to add shop bill. Please try again.");
+      }
+    } catch (err) {
+      alert(err.response?.data?.message || "Failed to add shop bill. Please try again.");
+    }
   };
 
   const handleGetShopBills = () => {
-    setShopBills([
-      { id: 1, name: 'Shop Laxmi Stores', bags: 20, price: 450, advance: 1000, total: 9000, date: billdate1 }
-    ]);
-    setShopBillsSearched(true);
+    fetchShopBillsByDate(billdate1);
   };
 
-  const handleGetShopsData = () => {
-    setSearchData({
-      shopName: txtShopsName,
-      year: selectedYear,
-      records: [
-        { id: 1, date: `${selectedYear}-05-12`, bags: 50, price: 400, advance: 2000, pending: 18000 }
-      ]
-    });
+  const handleGetShopsData = async () => {
+    try {
+      const token = localStorage.getItem('token');
+      const res = await axios.get(`${API_BASE_URL}/api/shops?year=${selectedYear}&name=${encodeURIComponent(txtShopsName.trim())}`, {
+        headers: token ? { Authorization: `Bearer ${token}` } : {}
+      });
+      if (res.data && res.data.success) {
+        const records = (res.data.shops || []).map(r => {
+          const bagsCount = Number(r.no_of_bags || r.bags || 0);
+          const priceVal = Number(r.price || 0);
+          const advanceVal = Number(r.advance || 0);
+          const totalVal = bagsCount * priceVal;
+          const pendingVal = Math.max(0, totalVal - advanceVal);
+          return {
+            id: r.id,
+            date: r.date,
+            bags: bagsCount,
+            price: priceVal,
+            advance: advanceVal,
+            pending: pendingVal
+          };
+        });
+        setSearchData({
+          shopName: txtShopsName,
+          year: selectedYear,
+          records: records
+        });
+      }
+    } catch (err) {
+      setSearchData({
+        shopName: txtShopsName,
+        year: selectedYear,
+        records: []
+      });
+    }
   };
 
   return (
@@ -118,14 +202,22 @@ export default function Shops({ user, onLogout }) {
                       </tr>
                     </thead>
                     <tbody>
-                      {shopBills.map((b) => (
-                        <tr key={b.id} style={{ borderBottom: '1px solid #e2e8f0' }}>
-                          <td style={{ padding: '6px', fontWeight: 'bold' }}>{b.name}</td>
-                          <td style={{ padding: '6px', textAlign: 'center' }}>{b.bags}</td>
-                          <td style={{ padding: '6px', textAlign: 'center' }}>₹{b.price}</td>
-                          <td style={{ padding: '6px', textAlign: 'right', fontWeight: 'bold' }}>₹{b.total}</td>
+                      {shopBills.length === 0 ? (
+                        <tr>
+                          <td colSpan="4" align="center" style={{ padding: '12px', color: '#dc2626', fontWeight: 'bold' }}>
+                            No shop bills found for {billdate1}
+                          </td>
                         </tr>
-                      ))}
+                      ) : (
+                        shopBills.map((b) => (
+                          <tr key={b.id} style={{ borderBottom: '1px solid #e2e8f0' }}>
+                            <td style={{ padding: '6px', fontWeight: 'bold' }}>{b.name}</td>
+                            <td style={{ padding: '6px', textAlign: 'center' }}>{b.bags}</td>
+                            <td style={{ padding: '6px', textAlign: 'center' }}>₹{b.price}</td>
+                            <td style={{ padding: '6px', textAlign: 'right', fontWeight: 'bold' }}>₹{b.total}</td>
+                          </tr>
+                        ))
+                      )}
                     </tbody>
                   </table>
                 </div>
@@ -177,15 +269,23 @@ export default function Shops({ user, onLogout }) {
                   </tr>
                 </thead>
                 <tbody>
-                  {searchData.records.map((r) => (
-                    <tr key={r.id} style={{ borderBottom: '1px solid #e2e8f0' }}>
-                      <td style={{ padding: '8px' }}>{r.date}</td>
-                      <td style={{ padding: '8px', textAlign: 'center' }}>{r.bags}</td>
-                      <td style={{ padding: '8px', textAlign: 'center' }}>₹{r.price}</td>
-                      <td style={{ padding: '8px', textAlign: 'right' }}>₹{r.advance}</td>
-                      <td style={{ padding: '8px', textAlign: 'right', fontWeight: 'bold', color: '#dc2626' }}>₹{r.pending}</td>
+                  {searchData.records.length === 0 ? (
+                    <tr>
+                      <td colSpan="5" align="center" style={{ padding: '12px', color: '#dc2626', fontWeight: 'bold' }}>
+                        No records found for {txtShopsName || 'all shops'} in {selectedYear}
+                      </td>
                     </tr>
-                  ))}
+                  ) : (
+                    searchData.records.map((r) => (
+                      <tr key={r.id} style={{ borderBottom: '1px solid #e2e8f0' }}>
+                        <td style={{ padding: '8px' }}>{r.date}</td>
+                        <td style={{ padding: '8px', textAlign: 'center' }}>{r.bags}</td>
+                        <td style={{ padding: '8px', textAlign: 'center' }}>₹{r.price}</td>
+                        <td style={{ padding: '8px', textAlign: 'right' }}>₹{r.advance}</td>
+                        <td style={{ padding: '8px', textAlign: 'right', fontWeight: 'bold', color: '#dc2626' }}>₹{r.pending}</td>
+                      </tr>
+                    ))
+                  )}
                 </tbody>
               </table>
             </div>
@@ -195,3 +295,4 @@ export default function Shops({ user, onLogout }) {
     </div>
   );
 }
+
