@@ -118,16 +118,18 @@ export default function Signup({ onLoginSuccess }) {
       });
 
       if (response.data && response.data.success) {
-        handleSignupSuccess({ name, email });
+        const token = response.data.access_token || response.data.token;
+        handleSignupSuccess(response.data.user || { name, email }, token);
       } else {
-        setError(response.data.message || "Signup failed");
+        setError(response.data?.message || "Signup failed. Please try again.");
       }
     } catch (err) {
-      handleSignupSuccess({ name, email });
+      setError(err.response?.data?.message || "Signup failed. Please try again.");
     } finally {
       setLoading(false);
     }
   }
+
 
   return (
     <div className="auth-page">
