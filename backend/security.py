@@ -99,7 +99,9 @@ def verify_google_credential(credential: str) -> dict[str, Any]:
         from google.auth.transport import requests as google_requests
         from google.oauth2 import id_token
     except ImportError as exc:
+        current_app.logger.exception("Failed to import Google auth packages: %s", exc)
         raise ValueError("Google sign-in support is not installed on the server") from exc
+
 
     try:
         claims = id_token.verify_oauth2_token(
