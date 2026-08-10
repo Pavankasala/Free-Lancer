@@ -16,7 +16,10 @@ export default function BalanceSheet({ user, onLogout }) {
   const fetchBalanceSheet = async (e) => {
     if (e) e.preventDefault();
     try {
-      const res = await axios.get(`${API_BASE_URL}/api/buyer-balance?year=${selectedYear}`);
+      const token = localStorage.getItem('token');
+      const res = await axios.get(`${API_BASE_URL}/api/buyer-balance?year=${selectedYear}`, {
+        headers: token ? { Authorization: `Bearer ${token}` } : {}
+      });
       if (res.data && res.data.success) {
         const recordsList = res.data.records || res.data.buyers || [];
         const rows = recordsList.map(b => ({
@@ -40,7 +43,6 @@ export default function BalanceSheet({ user, onLogout }) {
         setSearched(true);
         return;
       }
-
     } catch (err) {}
 
     setData({
@@ -48,12 +50,13 @@ export default function BalanceSheet({ user, onLogout }) {
         { date: `${selectedYear}-01-01`, buyerName: 'No Buyer Bills', bags: 0, total: 0.00, paid: 0.00, pending: 0.00 }
       ],
       oldBalance: 0.00,
-      cashPaid: totalCashPaid,
-      newAmount: totalNewAmount,
-      presentBalance: presentBalance
+      cashPaid: 0.00,
+      newAmount: 0.00,
+      presentBalance: 0.00
     });
     setSearched(true);
   };
+
 
   return (
     <div style={{ fontFamily: "'Times New Roman', Times, serif", backgroundColor: '#f8fafc', minHeight: '100vh' }}>
