@@ -81,7 +81,9 @@ export default function Shops({ user, onLogout }) {
         setBags('');
         setPrice('');
         setAdvance('');
-        fetchShopBillsByDate(billdate1);
+        setBilldate1(billdate);
+        fetchShopBillsByDate(billdate);
+
       } else {
         alert(res.data?.message || "Failed to add shop bill. Please try again.");
       }
