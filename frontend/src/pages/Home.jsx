@@ -36,22 +36,36 @@ export default function Home({ user, onLogout, onUpdateUser }) {
   const handleDeleteBill = async (billId) => {
     setBills(prev => prev.filter(b => b.id !== billId));
     try {
-      await axios.delete(`${API_BASE_URL}/api/delete-bill/${billId}`);
+      const token = localStorage.getItem('token');
+      await axios.delete(`${API_BASE_URL}/api/delete-bill/${billId}`, {
+        headers: token ? { Authorization: `Bearer ${token}` } : {}
+      });
       fetchBills(billdate);
-    } catch (err) {}
+    } catch (err) {
+      console.error('Error deleting bill:', err);
+      fetchBills(billdate);
+    }
   };
 
   const fetchBills = async (selectedDate) => {
     try {
-      const res = await axios.get(`${API_BASE_URL}/api/home-bills?date=${selectedDate}`);
+      const token = localStorage.getItem('token');
+      const res = await axios.get(`${API_BASE_URL}/api/home-bills?date=${selectedDate}`, {
+        headers: token ? { Authorization: `Bearer ${token}` } : {}
+      });
       if (res.data && res.data.success) {
         const apiBills = res.data.bills || [];
         setBills(apiBills);
       }
     } catch (err) {
-      setBills([]);
+      console.error('Error fetching home bills:', err);
     }
   };
+
+  useEffect(() => {
+    fetchBills(billdate);
+  }, [billdate]);
+
 
   const handleEditClick = (b) => {
     setEditingBillId(b.id);
