@@ -50,9 +50,9 @@ export default function Login({ onLoginSuccess }) {
       }
     }
 
-    const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID || "765546655855-8601r8pfg2qnaa3pl385mh8tcngs6f17.apps.googleusercontent.com";
+    const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID;
     const initGsi = () => {
-      if (window.google && window.google.accounts && window.google.accounts.id) {
+      if (clientId && window.google && window.google.accounts && window.google.accounts.id) {
         try {
           window.google.accounts.id.initialize({
             client_id: clientId,
@@ -96,11 +96,16 @@ export default function Login({ onLoginSuccess }) {
   }, []);
 
   const handleRealGoogleOAuth = () => {
-    const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID || "765546655855-8601r8pfg2qnaa3pl385mh8tcngs6f17.apps.googleusercontent.com";
+    const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID;
+    if (!clientId) {
+      setError("Google Sign-In is not configured. Please set VITE_GOOGLE_CLIENT_ID.");
+      return;
+    }
     const redirectUri = window.location.origin;
     const googleAuthUrl = `https://accounts.google.com/o/oauth2/v2/auth?client_id=${clientId}&redirect_uri=${encodeURIComponent(redirectUri)}&response_type=token&scope=${encodeURIComponent("email profile")}`;
     window.location.href = googleAuthUrl;
   };
+
 
 
 
