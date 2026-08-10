@@ -51,7 +51,9 @@ export default function Login({ onLoginSuccess }) {
     }
 
     const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID;
+    let isInitialized = false;
     const initGsi = () => {
+      if (isInitialized) return;
       if (clientId && window.google && window.google.accounts && window.google.accounts.id) {
         try {
           window.google.accounts.id.initialize({
@@ -82,6 +84,7 @@ export default function Login({ onLoginSuccess }) {
               width: 320
             });
           }
+          isInitialized = true;
         } catch (e) {}
       }
     };
@@ -94,6 +97,7 @@ export default function Login({ onLoginSuccess }) {
       clearTimeout(timeout);
     };
   }, []);
+
 
   const handleRealGoogleOAuth = () => {
     const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID;
