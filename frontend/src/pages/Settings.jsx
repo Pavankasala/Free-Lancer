@@ -10,12 +10,14 @@ export default function Settings({ user, onLogout, onUpdateUser }) {
   const [address, setAddress] = useState(user?.address || '');
   const [defaultHamali, setDefaultHamali] = useState(user?.default_hamali || 0);
   const [message, setMessage] = useState('');
+  const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
   const handleSave = async (e) => {
     e.preventDefault();
     setLoading(true);
     setMessage('');
+    setError('');
 
     const updatedData = {
       ...user,
@@ -30,6 +32,7 @@ export default function Settings({ user, onLogout, onUpdateUser }) {
     };
 
     try {
+      const token = localStorage.getItem('token');
       const res = await axios.post(`${API_BASE_URL}/api/update-profile`, {
         user_id: user?.user_id || user?.id,
         user_name: user?.user_name || 'admin',
@@ -38,20 +41,22 @@ export default function Settings({ user, onLogout, onUpdateUser }) {
         phone: phone,
         address: address,
         default_hamali: parseFloat(defaultHamali) || 0
+      }, {
+        headers: token ? { Authorization: `Bearer ${token}` } : {}
       });
 
-      const finalUser = res.data?.user ? { ...updatedData, ...res.data.user } : updatedData;
-      localStorage.setItem('user', JSON.stringify(finalUser));
-      if (onUpdateUser) {
-        onUpdateUser(finalUser);
+      if (res.data && res.data.success) {
+        const finalUser = res.data.user ? { ...updatedData, ...res.data.user } : updatedData;
+        localStorage.setItem('user', JSON.stringify(finalUser));
+        if (onUpdateUser) {
+          onUpdateUser(finalUser);
+        }
+        setMessage('Settings & profile details updated successfully!');
+      } else {
+        setError(res.data?.message || 'Failed to save profile. Please try again.');
       }
-      setMessage('Settings & profile details updated successfully!');
     } catch (err) {
-      localStorage.setItem('user', JSON.stringify(updatedData));
-      if (onUpdateUser) {
-        onUpdateUser(updatedData);
-      }
-      setMessage('Saved locally!');
+      setError(err.response?.data?.message || 'Failed to save profile. Please try again.');
     } finally {
       setLoading(false);
     }
@@ -77,6 +82,15 @@ export default function Settings({ user, onLogout, onUpdateUser }) {
                 </td>
               </tr>
             )}
+
+            {error && (
+              <tr>
+                <td colSpan="2" style={{ backgroundColor: '#fee2e2', color: '#dc2626', padding: '10px', textAlign: 'center', fontWeight: 'bold' }}>
+                  {error}
+                </td>
+              </tr>
+            )}
+
 
             <tr>
               <td style={{ padding: '10px', fontWeight: 'bold' }}>Commission Shop / Business Name:</td>
