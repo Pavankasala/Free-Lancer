@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
+import axios from 'axios';
 import Header from '../components/Header';
 import BillModal from '../components/BillModal';
+import { API_BASE_URL } from '../api/config';
 
 export default function Bills({ user, onLogout }) {
   const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
@@ -15,12 +17,12 @@ export default function Bills({ user, onLogout }) {
   const [editAdvance, setEditAdvance] = useState('');
   const [editDate, setEditDate] = useState('');
 
-  const loadBills = () => {
+  const loadBills = async () => {
     try {
-      const saved = localStorage.getItem('agri_local_bills');
-      const allBills = saved ? JSON.parse(saved) : [];
-      const filtered = allBills.filter(b => b.type !== 'BUYER' && (!selectedDate || b.date === selectedDate || b.billdate === selectedDate));
-      setBills(filtered);
+      const res = await axios.get(`${API_BASE_URL}/api/home-bills?date=${selectedDate}`);
+      if (res.data && res.data.success) {
+        setBills(res.data.bills || []);
+      }
     } catch (e) {
       setBills([]);
     }
@@ -30,25 +32,9 @@ export default function Bills({ user, onLogout }) {
     loadBills();
   }, [selectedDate]);
 
-  const handleConfirmBill = (billId) => {
+  const handleConfirmBill = async (billId) => {
     try {
-      const saved = localStorage.getItem('agri_local_bills');
-      const allBills = saved ? JSON.parse(saved) : [];
-      const updated = allBills.map(b => {
-        if (b.id === billId) {
-          const bags = Number(b.no_of_bags) || 0;
-          const price = Number(b.price) || 0;
-          const total = bags * price;
-          return {
-            ...b,
-            paid: 'YES',
-            confirmed: true,
-            advance: total > 0 ? total : (Number(b.advance) || 0)
-          };
-        }
-        return b;
-      });
-      localStorage.setItem('agri_local_bills', JSON.stringify(updated));
+      await axios.post(`${API_BASE_URL}/api/confirm-bill/${billId}`);
       loadBills();
       alert('Bill confirmed and marked as paid!');
     } catch (e) {
@@ -65,7 +51,7 @@ export default function Bills({ user, onLogout }) {
     setEditDate(b.date || b.billdate || selectedDate);
   };
 
-  const handleSaveEdit = (e) => {
+  const handleSaveEdit = async (e) => {
     e.preventDefault();
     if (!editingBill) return;
 
@@ -76,33 +62,19 @@ export default function Bills({ user, onLogout }) {
 
     const newBags = Number(editBags) || 0;
     const newPrice = Number(editPrice) || 0;
-    const newTotal = newBags * newPrice;
     const newAdvance = Number(editAdvance) || 0;
-    const isPaidOff = newTotal > 0 ? newAdvance >= newTotal : false;
 
     try {
-      const saved = localStorage.getItem('agri_local_bills');
-      const allBills = saved ? JSON.parse(saved) : [];
-      const updated = allBills.map(b => {
-        if (b.id === editingBill.id) {
-          return {
-            ...b,
-            name: editName,
-            no_of_bags: newBags,
-            price: newPrice,
-            advance: newAdvance,
-            date: editDate,
-            billdate: editDate,
-            paid: isPaidOff ? 'YES' : 'NO',
-            confirmed: isPaidOff
-          };
-        }
-        return b;
+      await axios.put(`${API_BASE_URL}/api/update-bill/${editingBill.id}`, {
+        name: editName,
+        no_of_bags: newBags,
+        price: newPrice,
+        advance: newAdvance,
+        date: editDate
       });
-      localStorage.setItem('agri_local_bills', JSON.stringify(updated));
+      alert('Bill updated successfully!');
       setEditingBill(null);
       loadBills();
-      alert('Bill updated successfully!');
     } catch (e) {
       alert('Failed to update bill');
     }

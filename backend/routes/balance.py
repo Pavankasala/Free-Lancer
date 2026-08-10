@@ -1,99 +1,135 @@
-from flask import Blueprint, request, jsonify
 from datetime import datetime
+
+from flask import Blueprint, g, jsonify, request
+
 import db
+from security import require_auth
+from .bills import _group_rows
 
-balance_bp = Blueprint('balance', __name__)
 
-@balance_bp.route('/api/balance-sheet', methods=['GET'])
+balance_bp = Blueprint("balance", __name__)
+
+
+def _value(row, key):
+    return float((dict(row) if row else {}).get(key) or 0)
+
+
+@balance_bp.route("/api/balance-sheet", methods=["GET"])
+@require_auth
 def get_balance_sheet():
-    date = request.args.get('date', datetime.now().strftime('%Y-%m-%d'))
+    """Return a user-owned operational summary for one business date."""
+    selected_date = request.args.get("date") or datetime.now().strftime("%Y-%m-%d")
     conn = db.get_db()
-    cursor = conn.cursor()
-    p = db.ph()
+    try:
+        cursor = conn.cursor()
+        p = db.ph()
+        cursor.execute(
+            f"""
+            SELECT COALESCE(SUM(no_of_bags * price), 0) AS total_buy, COALESCE(SUM(no_of_bags), 0) AS total_bags
+            FROM inventory WHERE user_id = {p} AND date = {p} AND type = 'BUY'
+            """,
+            (g.user_id, selected_date),
+        )
+        buy = cursor.fetchone()
+        cursor.execute(
+            f"SELECT COALESCE(SUM(amount), 0) AS total_exp FROM expenditures WHERE user_id = {p} AND date = {p}",
+            (g.user_id, selected_date),
+        )
+        expenses = cursor.fetchone()
+        cursor.execute(
+            f"SELECT COALESCE(SUM(amount), 0) AS total_cash FROM cash_collection WHERE user_id = {p} AND date = {p}",
+            (g.user_id, selected_date),
+        )
+        cash = cursor.fetchone()
+        cursor.execute(
+            f"SELECT COALESCE(SUM(no_of_bags * price), 0) AS total_sales FROM inventory WHERE user_id = {p} AND date = {p} AND type = 'SELL'",
+            (g.user_id, selected_date),
+        )
+        sales = cursor.fetchone()
+        return jsonify(
+            {
+                "success": True,
+                "date": selected_date,
+                "total_buy": _value(buy, "total_buy"),
+                "total_bags": int(_value(buy, "total_bags")),
+                "total_expenditures": _value(expenses, "total_exp"),
+                "total_cash": _value(cash, "total_cash"),
+                "total_sales": _value(sales, "total_sales"),
+            }
+        )
+    finally:
+        conn.close()
 
-    cursor.execute(f"SELECT SUM(no_of_bags * price) as total_buy, SUM(no_of_bags) as total_bags FROM inventory WHERE date = {p} AND type = 'BUY'", (date,))
-    buy_res = cursor.fetchone()
-    buy_dict = dict(buy_res) if buy_res else {}
 
-    cursor.execute(f"SELECT SUM(amount) as total_exp FROM expenditures WHERE date = {p}", (date,))
-    exp_res = cursor.fetchone()
-    exp_dict = dict(exp_res) if exp_res else {}
-
-    cursor.execute(f"SELECT SUM(amount) as total_cash FROM cash_collection WHERE date = {p}", (date,))
-    cash_res = cursor.fetchone()
-    cash_dict = dict(cash_res) if cash_res else {}
-
-    conn.close()
-
-    return jsonify({
-        'success': True,
-        'date': date,
-        'total_buy': buy_dict.get('total_buy') or 0.0,
-        'total_bags': buy_dict.get('total_bags') or 0,
-        'total_expenditures': exp_dict.get('total_exp') or 0.0,
-        'total_cash': cash_dict.get('total_cash') or 0.0
-    })
-
-@balance_bp.route('/api/kisan-balance', methods=['GET'])
+@balance_bp.route("/api/kisan-balance", methods=["GET"])
+@require_auth
 def get_kisan_balance():
-    name = request.args.get('name', '').strip()
-    year = request.args.get('year', datetime.now().strftime('%Y'))
+    name = request.args.get("name", "").strip()
+    year = request.args.get("year", datetime.now().strftime("%Y")).strip()
     conn = db.get_db()
-    cursor = conn.cursor()
-    p = db.ph()
+    try:
+        cursor = conn.cursor()
+        p = db.ph()
+        query = f"SELECT * FROM inventory WHERE user_id = {p} AND type = 'BUY'"
+        params = [g.user_id]
+        if name:
+            query += f" AND LOWER(name) LIKE {p}"
+            params.append(f"%{name.lower()}%")
+        if year:
+            query += f" AND date LIKE {p}"
+            params.append(f"{year}%")
+        query += " ORDER BY id DESC"
+        cursor.execute(query, tuple(params))
+        records = _group_rows(cursor.fetchall())
+        for record in records:
+            total = float(record.get("total_amount") or 0)
+            record["pending_balance"] = 0.0 if record.get("paid") == "YES" else max(total - float(record.get("advance") or 0), 0.0)
+        return jsonify({"success": True, "records": records})
+    finally:
+        conn.close()
 
-    query = f"SELECT * FROM inventory WHERE (type = 'BUY' OR type IS NULL)"
-    params = []
 
-    if name:
-        query += f" AND LOWER(name) LIKE {p}"
-        params.append(f"%{name.lower()}%")
-    if year:
-        query += f" AND date LIKE {p}"
-        params.append(f"{year}%")
-
-    query += " ORDER BY id DESC"
-
-    cursor.execute(query, tuple(params))
-    rows = cursor.fetchall()
-    conn.close()
-    return jsonify({'success': True, 'records': [dict(r) for r in rows]})
-
-@balance_bp.route('/api/buyer-balance', methods=['GET'])
+@balance_bp.route("/api/buyer-balance", methods=["GET"])
+@require_auth
 def get_buyer_balance():
-    name = request.args.get('name', '').strip()
-    year = request.args.get('year', datetime.now().strftime('%Y'))
+    name = request.args.get("name", "").strip()
+    year = request.args.get("year", datetime.now().strftime("%Y")).strip()
     conn = db.get_db()
-    cursor = conn.cursor()
-    p = db.ph()
+    try:
+        cursor = conn.cursor()
+        p = db.ph()
+        query = f"SELECT * FROM inventory WHERE user_id = {p} AND type = 'BUYER'"
+        params = [g.user_id]
+        if name:
+            query += f" AND LOWER(name) LIKE {p}"
+            params.append(f"%{name.lower()}%")
+        if year:
+            query += f" AND date LIKE {p}"
+            params.append(f"{year}%")
+        query += " ORDER BY id DESC"
+        cursor.execute(query, tuple(params))
+        records = _group_rows(cursor.fetchall())
 
-    query = f"SELECT * FROM inventory WHERE type = 'BUYER'"
-    params = []
+        total_amount = 0.0
+        cash_paid = 0.0
+        for record in records:
+            total = float(record.get("total_amount") or 0)
+            paid = total if record.get("paid") == "YES" else min(float(record.get("advance") or 0), total)
+            record["cash_paid"] = paid
+            record["pending_balance"] = total - paid
+            total_amount += total
+            cash_paid += paid
 
-    if name:
-        query += f" AND LOWER(name) LIKE {p}"
-        params.append(f"%{name.lower()}%")
-    if year:
-        query += f" AND date LIKE {p}"
-        params.append(f"{year}%")
-
-    query += " ORDER BY id DESC"
-
-    cursor.execute(query, tuple(params))
-    rows = cursor.fetchall()
-    conn.close()
-
-    records = [dict(r) for r in rows]
-    total_amount = sum((r.get('no_of_bags', 0) or 0) * (r.get('price', 0) or 0) for r in records)
-    cash_paid = sum((r.get('no_of_bags', 0) * r.get('price', 0)) if r.get('paid') == 'YES' else (r.get('advance', 0) or 0) for r in records)
-    pending_balance = total_amount - cash_paid
-
-    return jsonify({
-        'success': True,
-        'records': records,
-        'summary': {
-            'total_amount': total_amount,
-            'cash_paid': cash_paid,
-            'pending_balance': pending_balance
-        }
-    })
+        return jsonify(
+            {
+                "success": True,
+                "records": records,
+                "summary": {
+                    "total_amount": total_amount,
+                    "cash_paid": cash_paid,
+                    "pending_balance": total_amount - cash_paid,
+                },
+            }
+        )
+    finally:
+        conn.close()

@@ -5,7 +5,7 @@ import axios from "axios";
 import { API_BASE_URL } from "../api/config";
 import "../styles/modal.css";
 
-function BillModal({ bill, onClose }) {
+function BillModal({ bill, isBuyerPage, onClose }) {
   const [isDownloading, setIsDownloading] = useState(false);
   const [isSendingSMS, setIsSendingSMS] = useState(false);
   const [statusMessage, setStatusMessage] = useState("");
@@ -15,7 +15,8 @@ function BillModal({ bill, onClose }) {
 
   if (!bill) return null;
 
-  const farmerName = bill.kisanName || bill.name || "Kisan";
+  const isBuyerBill = bill.type === "BUYER" || Boolean(isBuyerPage);
+  const farmerName = bill.kisanName || bill.name || (isBuyerBill ? "Buyer" : "Kisan");
   const billDate = bill.date || new Date().toISOString().split("T")[0];
   const billTime = bill.time || bill.advanceTime || new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 
@@ -28,9 +29,9 @@ function BillModal({ bill, onClose }) {
   // Financial Breakdown calculations
   const grossTotal = Number(bill.total || (totalBagsCount * (Number(bill.price) || 0))) || 0;
   const hamaliVal =
-    bill.hamali !== undefined
+    bill.hamali !== undefined && Number(bill.hamali) > 0
       ? Number(bill.hamali)
-      : totalBagsCount * 10;
+      : totalBagsCount * 5;
   const commissionVal =
     bill.commission !== undefined
       ? Number(bill.commission)
@@ -38,11 +39,13 @@ function BillModal({ bill, onClose }) {
   const damagedGoodsVal =
     bill.damagedGoods !== undefined && Number(bill.damagedGoods) > 0
       ? Number(bill.damagedGoods)
-      : Math.round(grossTotal * 0.05);
+      : Math.round(grossTotal * 0.06);
   const advanceVal = Number(bill.advance) || 0;
 
-  const computedNet =
-    grossTotal - hamaliVal - commissionVal - damagedGoodsVal - advanceVal;
+  const totalExpenses = commissionVal + hamaliVal + damagedGoodsVal + advanceVal;
+  const computedNet = isBuyerBill
+    ? grossTotal - advanceVal
+    : grossTotal - totalExpenses;
   const netPayable = Math.max(0, computedNet);
 
   // PDF Export Feature
@@ -222,7 +225,7 @@ function BillModal({ bill, onClose }) {
               <span>Date & Time:</span> <strong style={{ color: "#1e293b" }}>{billDate} {billTime}</strong>
             </div>
             <div>
-              <span>Farmer / Kisan:</span> <strong>{farmerName}</strong>
+              <span>{isBuyerBill ? "Farmer / Buyer name:" : "Farmer / Kisan:"}</span> <strong>{farmerName}</strong>
             </div>
             <div style={{ display: "flex", alignItems: "center" }}>
               <span>Mobile No:</span>
@@ -322,24 +325,28 @@ function BillModal({ bill, onClose }) {
               <strong>₹{grossTotal.toLocaleString()}</strong>
             </div>
 
-            <div className="summary-row" style={{ display: "flex", justifyContent: "space-between", color: "#dc2626" }}>
-              <span>Hamali Deduction:</span>
-              <span>- ₹{hamaliVal.toLocaleString()}</span>
-            </div>
+            {!isBuyerBill && (
+              <>
+                <div className="summary-row" style={{ display: "flex", justifyContent: "space-between", color: "#dc2626" }}>
+                  <span>Hamali Deduction:</span>
+                  <span>- ₹{hamaliVal.toLocaleString()}</span>
+                </div>
 
-            <div className="summary-row" style={{ display: "flex", justifyContent: "space-between", color: "#dc2626" }}>
-              <span>Commission (4%):</span>
-              <span>- ₹{commissionVal.toLocaleString()}</span>
-            </div>
+                <div className="summary-row" style={{ display: "flex", justifyContent: "space-between", color: "#dc2626" }}>
+                  <span>Commission (4%):</span>
+                  <span>- ₹{commissionVal.toLocaleString()}</span>
+                </div>
 
-            <div className="summary-row" style={{ display: "flex", justifyContent: "space-between", color: "#dc2626" }}>
-              <span>Damage (6%):</span>
-              <span>- ₹{damagedGoodsVal.toLocaleString()}</span>
-            </div>
+                <div className="summary-row" style={{ display: "flex", justifyContent: "space-between", color: "#dc2626" }}>
+                  <span>Damage (6%):</span>
+                  <span>- ₹{damagedGoodsVal.toLocaleString()}</span>
+                </div>
+              </>
+            )}
 
             {advanceVal > 0 && (
               <div className="summary-row" style={{ display: "flex", justifyContent: "space-between", color: "#dc2626" }}>
-                <span>Advance Paid ({billDate} {billTime}):</span>
+                <span>Advance Paid ({billDate} {billTime}{bill.paymentMode || bill.village ? ` - ${bill.paymentMode || bill.village}` : ''}):</span>
                 <span>- ₹{advanceVal.toLocaleString()}</span>
               </div>
             )}
@@ -347,6 +354,87 @@ function BillModal({ bill, onClose }) {
             <div className="summary-row highlight-net" style={{ display: "flex", justifyContent: "space-between", fontSize: "1.05rem", fontWeight: "bold", borderTop: "2px solid #1e293b", paddingTop: "6px", marginTop: "6px", color: "#166534" }}>
               <span>Net Payable Amount:</span>
               <strong>₹{netPayable.toLocaleString()}</strong>
+            </div>
+          </div>
+
+          {/* Physical Paper Thermal Receipt View matching exact physical slip format from photo */}
+          <div id="thermal-slip-view" style={{ marginTop: "20px", border: "1px dashed #64748b", padding: "16px", backgroundColor: "#ffffff", borderRadius: "8px", fontFamily: "monospace", maxWidth: "340px", margin: "20px auto 0 auto", boxShadow: "0 2px 8px rgba(0,0,0,0.06)" }}>
+            <div style={{ textAlign: "left", marginBottom: "8px" }}>
+              <div style={{ fontWeight: "bold", fontSize: "14px" }}>NAME : {farmerName.toUpperCase()}</div>
+              <div style={{ display: "flex", justifyContent: "space-between", fontSize: "13px", marginTop: "4px" }}>
+                <span>DATE : {billDate}</span>
+                <span>No. {bill.id || '55113'}</span>
+              </div>
+            </div>
+            <div style={{ borderTop: "1px dashed #334155", margin: "8px 0" }}></div>
+            
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", fontSize: "13px", fontWeight: "bold", marginBottom: "4px" }}>
+              <span>QTY</span>
+              <span style={{ textAlign: "center" }}>PRICE</span>
+              <span style={{ textAlign: "right" }}>AMT</span>
+            </div>
+            <div style={{ borderTop: "1px dashed #94a3b8", marginBottom: "6px" }}></div>
+
+            {bill.channels && bill.channels.length > 0 ? (
+              bill.channels.map((ch, idx) => (
+                <div key={idx} style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", fontSize: "13px", marginBottom: "4px" }}>
+                  <span>{ch.bags}</span>
+                  <span style={{ textAlign: "center" }}>{ch.price}</span>
+                  <span style={{ textAlign: "right" }}>{ch.bags * ch.price}</span>
+                </div>
+              ))
+            ) : (
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", fontSize: "13px", marginBottom: "4px" }}>
+                <span>{totalBagsCount}</span>
+                <span style={{ textAlign: "center" }}>{bill.price || (totalBagsCount > 0 ? grossTotal / totalBagsCount : 0)}</span>
+                <span style={{ textAlign: "right" }}>{grossTotal}</span>
+              </div>
+            )}
+
+            <div style={{ borderTop: "1px dashed #334155", margin: "8px 0" }}></div>
+            <div style={{ display: "flex", justifyContent: "space-between", fontSize: "13px", fontWeight: "bold" }}>
+              <span>Total</span>
+              <span>{totalBagsCount} &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; {grossTotal}</span>
+            </div>
+            <div style={{ borderTop: "1px dashed #334155", margin: "8px 0" }}></div>
+
+            {!isBuyerBill && (
+              <div style={{ fontSize: "13px", display: "flex", flexDirection: "column", gap: "4px" }}>
+                <div style={{ display: "flex", justifyContent: "space-between" }}>
+                  <span>Commission(4%)</span>
+                  <span>{commissionVal}</span>
+                </div>
+                <div style={{ display: "flex", justifyContent: "space-between" }}>
+                  <span>Hamali</span>
+                  <span>{hamaliVal}</span>
+                </div>
+                <div style={{ display: "flex", justifyContent: "space-between" }}>
+                  <span>Less For Damages</span>
+                  <span>{damagedGoodsVal}</span>
+                </div>
+                {advanceVal > 0 && (
+                  <div style={{ display: "flex", justifyContent: "space-between" }}>
+                    <span>Advance</span>
+                    <span>{advanceVal}</span>
+                  </div>
+                )}
+                <div style={{ borderTop: "1px dashed #334155", margin: "6px 0" }}></div>
+                <div style={{ display: "flex", justifyContent: "space-between", fontWeight: "bold" }}>
+                  <span>Total Expenses</span>
+                  <span>{totalExpenses}</span>
+                </div>
+                <div style={{ borderTop: "1px dashed #334155", margin: "6px 0" }}></div>
+              </div>
+            )}
+
+            <div style={{ display: "flex", justifyContent: "space-between", fontSize: "15px", fontWeight: "bold", margin: "6px 0" }}>
+              <span>{isBuyerBill ? "Nett Payable" : "Nett"}</span>
+              <span>{netPayable}</span>
+            </div>
+            <div style={{ borderTop: "1px dashed #334155", margin: "8px 0" }}></div>
+
+            <div style={{ textAlign: "center", marginTop: "10px", fontSize: "12px", fontWeight: "bold", letterSpacing: "1px" }}>
+              INDIAN LEMON COMPANY
             </div>
           </div>
         </div>

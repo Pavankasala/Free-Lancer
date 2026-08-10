@@ -1,5 +1,7 @@
 import React, { useState, useEffect } from 'react';
+import axios from 'axios';
 import Header from '../components/Header';
+import { API_BASE_URL } from '../api/config';
 
 const DEFAULT_BUYERS = [
   'Please Select ...',
@@ -27,34 +29,32 @@ export default function SoldData({ user, onLogout }) {
   const [buyerOptions, setBuyerOptions] = useState(DEFAULT_BUYERS);
 
   useEffect(() => {
-    // Load buyer names from buyer bills
-    try {
-      const savedBuyer = localStorage.getItem('agri_local_buyer_bills');
-      if (savedBuyer) {
-        const bills = JSON.parse(savedBuyer);
-        const buyerNames = bills.map(b => b.name || b.buyerName).filter(Boolean);
-        const unique = Array.from(new Set(buyerNames));
-        setBuyerOptions(['Please Select ...', ...unique]);
-      }
-    } catch (e) {}
+    const fetchBuyers = async () => {
+      try {
+        const res = await axios.get(`${API_BASE_URL}/api/shops`);
+        if (res.data && res.data.success && Array.isArray(res.data.shops)) {
+          const names = res.data.shops.map(s => s.name).filter(Boolean);
+          setBuyerOptions(['Please Select ...', ...Array.from(new Set(names))]);
+        }
+      } catch (e) {}
+    };
+    fetchBuyers();
     fetchSoldData();
   }, []);
 
-  const getLocalSoldData = () => {
+
+  const fetchSoldData = async () => {
     try {
-      const saved = localStorage.getItem('agri_local_sold_data');
-      return saved ? JSON.parse(saved) : [];
+      const res = await axios.get(`${API_BASE_URL}/api/sold-data?date=${soldDate}`);
+      if (res.data && res.data.success) {
+        setSoldList(res.data.sold_data || []);
+      }
     } catch (e) {
-      return [];
+      setSoldList([]);
     }
   };
 
-  const fetchSoldData = () => {
-    const data = getLocalSoldData();
-    setSoldList(data);
-  };
-
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     if (!soldTo || soldTo === 'Please Select ...') {
       alert('Please select a buyer in "Sold To"');
@@ -83,19 +83,14 @@ export default function SoldData({ user, onLogout }) {
     };
 
     try {
-      const current = getLocalSoldData();
-      let updated;
-
       if (editingId) {
-        updated = current.map(item => item.id === editingId ? record : item);
+        await axios.put(`${API_BASE_URL}/api/update-sold-data/${editingId}`, record);
         alert('Sold data updated successfully');
       } else {
-        updated = [record, ...current];
+        await axios.post(`${API_BASE_URL}/api/sold-data`, record);
         alert('Sold data saved successfully');
       }
-
-      localStorage.setItem('agri_local_sold_data', JSON.stringify(updated));
-      setSoldList(updated);
+      fetchSoldData();
     } catch (err) {}
 
     resetForm();
@@ -120,25 +115,24 @@ export default function SoldData({ user, onLogout }) {
     setEditingId(item.id);
     setSoldDate(item.date || soldDate);
     setName(item.name || '');
-    setSoldTo(item.soldTo || '');
-    setNoOfBags(String(item.noOfBags || ''));
-    setHamaliPerBag(String(item.hamaliPerBag || ''));
-    setPartyCommission(item.partyCommission || '');
-    setLorryNo(item.lorryNo || '');
-    setLorryCharges(String(item.lorryCharges || ''));
+    setSoldTo(item.soldTo || item.sold_to || '');
+    setNoOfBags(String(item.noOfBags || item.no_of_bags || ''));
+    setHamaliPerBag(String(item.hamaliPerBag || item.hamali_per_bag || ''));
+    setPartyCommission(item.partyCommission || item.party_commission || '');
+    setLorryNo(item.lorryNo || item.lorry_no || '');
+    setLorryCharges(String(item.lorryCharges || item.lorry_charges || ''));
     setTons(String(item.tons || ''));
     setEnam(item.enam || '');
-    setLorryAdvance(String(item.lorryAdvance || ''));
-    setVillageRef(item.villageRef || '');
+    setLorryAdvance(String(item.lorryAdvance || item.lorry_advance || ''));
+    setVillageRef(item.villageRef || item.village_ref || '');
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
-  const handleDelete = (id) => {
+  const handleDelete = async (id) => {
+    setSoldList(prev => prev.filter(item => item.id !== id));
     try {
-      const current = getLocalSoldData();
-      const updated = current.filter(item => item.id !== id);
-      localStorage.setItem('agri_local_sold_data', JSON.stringify(updated));
-      setSoldList(updated);
+      await axios.delete(`${API_BASE_URL}/api/delete-sold-data/${id}`);
+      fetchSoldData();
     } catch (e) {}
     setConfirmDeleteId(null);
   };

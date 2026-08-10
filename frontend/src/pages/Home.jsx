@@ -31,88 +31,26 @@ export default function Home({ user, onLogout, onUpdateUser }) {
   const [bills, setBills] = useState([]);
   const [selectedBill, setSelectedBill] = useState(null);
   const [confirmDeleteId, setConfirmDeleteId] = useState(null);
-
-  const getLocalBills = () => {
-    try {
-      const saved = localStorage.getItem('agri_local_bills');
-      const parsed = saved ? JSON.parse(saved) : [];
-      return parsed.filter(b => b.type !== 'BUYER');
-    } catch (e) {
-      return [];
-    }
-  };
-
-  const saveLocalBill = (newBill) => {
-    try {
-      const current = getLocalBills();
-      const updated = [newBill, ...current];
-      localStorage.setItem('agri_local_bills', JSON.stringify(updated));
-    } catch (e) {}
-  };
-
-  const removeLocalBill = (billId) => {
-    try {
-      const current = getLocalBills();
-      const updated = current.filter(b => b.id !== billId);
-      localStorage.setItem('agri_local_bills', JSON.stringify(updated));
-    } catch (e) {}
-  };
+  const [editingBillId, setEditingBillId] = useState(null);
 
   const handleDeleteBill = async (billId) => {
-    removeLocalBill(billId);
     setBills(prev => prev.filter(b => b.id !== billId));
     try {
       await axios.delete(`${API_BASE_URL}/api/delete-bill/${billId}`);
+      fetchBills(billdate);
     } catch (err) {}
   };
 
   const fetchBills = async (selectedDate) => {
-    const local = getLocalBills().filter(b => !selectedDate || b.date === selectedDate);
     try {
       const res = await axios.get(`${API_BASE_URL}/api/home-bills?date=${selectedDate}`);
       if (res.data && res.data.success) {
         const apiBills = res.data.bills || [];
-        const combined = [...local, ...apiBills.filter(ab => !local.some(lb => lb.id === ab.id))];
-        setBills(combined);
-        return;
+        setBills(apiBills);
       }
-    } catch (err) {}
-    setBills(local);
-  };
-
-  useEffect(() => {
-    fetchBills(billdate);
-  }, [billdate]);
-
-  const addChannel = (e) => {
-    e.preventDefault();
-    if (channels.length < 10) {
-      setChannels([...channels, { bags: '', price: '' }]);
-    } else {
-      alert("Maximum channels 10 only");
+    } catch (err) {
+      setBills([]);
     }
-  };
-
-  const handleChannelChange = (index, field, value) => {
-    const updated = [...channels];
-    updated[index][field] = value;
-    setChannels(updated);
-  };
-
-  const [editingBillId, setEditingBillId] = useState(null);
-
-  const saveOrUpdateLocalBill = (billObj) => {
-    try {
-      const current = getLocalBills();
-      const exists = current.some(b => b.id === billObj.id);
-      let updated;
-      if (exists) {
-        updated = current.map(b => b.id === billObj.id ? { ...b, ...billObj } : b);
-      } else {
-        updated = [billObj, ...current];
-      }
-      localStorage.setItem('agri_local_bills', JSON.stringify(updated));
-    } catch (e) {}
   };
 
   const handleEditClick = (b) => {
@@ -131,13 +69,19 @@ export default function Home({ user, onLogout, onUpdateUser }) {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
-  const handleCancelEdit = () => {
-    setEditingBillId(null);
-    setName('');
-    setChannels([{ bags: '', price: '' }]);
-    setAdvance('');
-    setBagsSold('');
-    setPriceSold('');
+  const addChannel = (e) => {
+    e.preventDefault();
+    if (channels.length < 10) {
+      setChannels([...channels, { bags: '', price: '' }]);
+    } else {
+      alert("Maximum channels 10 only");
+    }
+  };
+
+  const handleChannelChange = (index, field, value) => {
+    const updated = [...channels];
+    updated[index][field] = value;
+    setChannels(updated);
   };
 
   const handleSubmit = async (e) => {
@@ -176,33 +120,34 @@ export default function Home({ user, onLogout, onUpdateUser }) {
     };
 
     try {
-      const res = await axios.post(`${API_BASE_URL}/api/add-bill`, {
-        name,
-        billdate,
-        advanceTime,
-        items: channels,
-        hamali,
-        advance,
-        bagsSold,
-        priceSold
-      });
-      if (res.data && res.data.success) {
-        if (res.data.bill) {
-          saveOrUpdateLocalBill({ ...res.data.bill, ...billObj });
-        } else {
-          saveOrUpdateLocalBill(billObj);
-        }
+      if (editingBillId) {
+        await axios.put(`${API_BASE_URL}/api/update-bill/${editingBillId}`, {
+          name,
+          date: billdate,
+          no_of_bags: totalBags,
+          price: avgPrice,
+          advance,
+          hamali
+        });
       } else {
-        saveOrUpdateLocalBill(billObj);
+        await axios.post(`${API_BASE_URL}/api/add-bill`, {
+          name,
+          billdate,
+          advanceTime,
+          items: channels,
+          hamali,
+          advance,
+          bagsSold,
+          priceSold
+        });
       }
-    } catch (err) {
-      saveOrUpdateLocalBill(billObj);
-    }
+    } catch (err) {}
 
     alert(editingBillId ? 'Updated successfully' : 'saved successfully');
     setEditingBillId(null);
     setName('');
     setChannels([{ bags: '', price: '' }]);
+    setHamali(5);
     setAdvance('');
     setBagsSold('');
     setPriceSold('');

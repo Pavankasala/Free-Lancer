@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import Header from '../components/Header';
+import BillModal from '../components/BillModal';
 import { API_BASE_URL } from '../api/config';
 
 export default function BuyerBalance({ user, onLogout }) {
@@ -9,6 +10,7 @@ export default function BuyerBalance({ user, onLogout }) {
   const [buyerOptions, setBuyerOptions] = useState([]);
   const [balanceData, setBalanceData] = useState([]);
   const [searched, setSearched] = useState(false);
+  const [selectedBill, setSelectedBill] = useState(null);
 
   const years = [];
   for (let y = 2017; y <= 2060; y++) {
@@ -16,47 +18,30 @@ export default function BuyerBalance({ user, onLogout }) {
   }
 
   useEffect(() => {
-    try {
-      const saved = localStorage.getItem('agri_local_buyer_bills');
-      if (saved) {
-        const bills = JSON.parse(saved);
-        const names = bills.map(b => b.name || b.buyerName).filter(Boolean);
-        setBuyerOptions(Array.from(new Set(names)));
-      }
-    } catch (e) {}
     handleGetBalance();
   }, [selectedYear]);
 
-  const getLocalBuyerBills = () => {
-    try {
-      const saved = localStorage.getItem('agri_local_buyer_bills');
-      return saved ? JSON.parse(saved) : [];
-    } catch (e) {
-      return [];
-    }
-  };
-
   const handleGetBalance = async () => {
-    const local = getLocalBuyerBills();
-    let allBuyerBills = [...local];
-
     try {
       const res = await axios.get(`${API_BASE_URL}/api/buyer-bills`);
       if (res.data && res.data.success) {
         const apiBills = res.data.bills || [];
-        allBuyerBills = [...local, ...apiBills.filter(ab => !local.some(lb => lb.id === ab.id))];
+        const names = apiBills.map(b => b.name || b.buyerName).filter(Boolean);
+        setBuyerOptions(Array.from(new Set(names)));
+
+        const filtered = apiBills.filter(b => {
+          const nameStr = b.name || b.buyerName || '';
+          const matchesName = !buyerName || nameStr.toLowerCase().includes(buyerName.toLowerCase());
+          const bDate = b.date || b.billdate || '';
+          const matchesYear = !selectedYear || bDate.startsWith(selectedYear);
+          return matchesName && matchesYear;
+        });
+
+        setBalanceData(filtered);
       }
-    } catch (err) {}
-
-    const filtered = allBuyerBills.filter(b => {
-      const nameStr = b.name || b.buyerName || '';
-      const matchesName = !buyerName || nameStr.toLowerCase().includes(buyerName.toLowerCase());
-      const bDate = b.date || b.billdate || '';
-      const matchesYear = !selectedYear || bDate.startsWith(selectedYear);
-      return matchesName && matchesYear;
-    });
-
-    setBalanceData(filtered);
+    } catch (err) {
+      setBalanceData([]);
+    }
     setSearched(true);
   };
 
@@ -100,8 +85,8 @@ export default function BuyerBalance({ user, onLogout }) {
                 style={{ border: '1px solid #cbd5e1', padding: '6px', borderRadius: '4px', flex: '1' }}
               />
               <datalist id="buyer-options-list">
-                {buyerOptions.map((opt, idx) => (
-                  <option key={idx} value={opt} />
+                {buyerOptions.map((name, idx) => (
+                  <option key={idx} value={name} />
                 ))}
               </datalist>
             </div>
@@ -111,7 +96,7 @@ export default function BuyerBalance({ user, onLogout }) {
               onClick={handleGetBalance}
               style={{ width: '100%', padding: '10px', backgroundColor: '#2563eb', color: 'white', border: 'none', borderRadius: '6px', fontSize: '15px', fontWeight: 'bold', cursor: 'pointer' }}
             >
-              Get Buyer Balance
+              Get Balance
             </button>
           </div>
         </div>
@@ -119,21 +104,12 @@ export default function BuyerBalance({ user, onLogout }) {
         {/* Balance Report Table Card */}
         {searched && (
           <div style={{ backgroundColor: '#ffffff', borderRadius: '10px', padding: '16px', boxShadow: '0 2px 8px rgba(0,0,0,0.08)', border: '1px solid #8ce86a' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', flexWrap: 'wrap', gap: '8px' }}>
-              <h2 style={{ color: '#15803d', margin: 0, fontSize: '1.3rem', fontWeight: 'bold' }}>
-                - Buyer Ledger & Balance ({selectedYear}) -
-              </h2>
-              <button
-                type="button"
-                onClick={() => window.print()}
-                style={{ backgroundColor: '#16a34a', color: 'white', border: 'none', borderRadius: '6px', padding: '6px 14px', fontWeight: 'bold', cursor: 'pointer' }}
-              >
-                🖨️ Print Buyer Ledger
-              </button>
-            </div>
+            <h2 align="center" style={{ color: '#15803d', margin: '0 0 16px 0', fontSize: '1.3rem', fontWeight: 'bold' }}>
+              - Buyer Ledger & Balance ({selectedYear}) -
+            </h2>
 
             <div style={{ overflowX: 'auto' }}>
-              <table width="100%" style={{ borderCollapse: 'collapse', minWidth: '650px' }}>
+              <table width="100%" style={{ borderCollapse: 'collapse', minWidth: '600px' }}>
                 <thead>
                   <tr style={{ backgroundColor: '#15803d', color: 'white' }}>
                     <th style={{ padding: '8px', textAlign: 'left' }}>S.No.</th>
@@ -143,12 +119,13 @@ export default function BuyerBalance({ user, onLogout }) {
                     <th style={{ padding: '8px', textAlign: 'right' }}>Total Bills Amount (₹)</th>
                     <th style={{ padding: '8px', textAlign: 'right' }}>Paid / Advance (₹)</th>
                     <th style={{ padding: '8px', textAlign: 'right' }}>Pending Balance (₹)</th>
+                    <th style={{ padding: '8px', textAlign: 'center' }}>Action</th>
                   </tr>
                 </thead>
                 <tbody>
                   {balanceData.length === 0 ? (
                     <tr>
-                      <td colSpan="7" align="center" style={{ padding: '16px', color: '#dc2626', fontWeight: 'bold' }}>
+                      <td colSpan="8" align="center" style={{ padding: '16px', color: '#dc2626', fontWeight: 'bold' }}>
                         No Buyer ledger records found for {selectedYear}.
                       </td>
                     </tr>
@@ -168,6 +145,15 @@ export default function BuyerBalance({ user, onLogout }) {
                           <td style={{ padding: '8px', textAlign: 'right', fontWeight: 'bold', color: pending > 0 ? '#dc2626' : '#16a34a' }}>
                             ₹{pending.toLocaleString()}
                           </td>
+                          <td style={{ padding: '8px', textAlign: 'center' }}>
+                            <button
+                              type="button"
+                              onClick={() => setSelectedBill(b)}
+                              style={{ backgroundColor: '#2563eb', color: '#ffffff', border: 'none', borderRadius: '4px', padding: '4px 10px', cursor: 'pointer', fontSize: '12px', fontWeight: 'bold' }}
+                            >
+                              🖨️ Print Bill
+                            </button>
+                          </td>
                         </tr>
                       );
                     })
@@ -181,6 +167,7 @@ export default function BuyerBalance({ user, onLogout }) {
                       <td align="right" style={{ padding: '10px', color: '#dc2626', fontSize: '1.1rem' }}>
                         ₹{totalPendingSum.toLocaleString()}
                       </td>
+                      <td></td>
                     </tr>
                   )}
                 </tbody>
@@ -189,6 +176,8 @@ export default function BuyerBalance({ user, onLogout }) {
           </div>
         )}
       </div>
+
+      <BillModal bill={selectedBill} isBuyerPage={true} onClose={() => setSelectedBill(null)} />
     </div>
   );
 }

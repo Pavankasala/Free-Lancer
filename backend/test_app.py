@@ -1,28 +1,50 @@
 import unittest
 import json
 import os
+import tempfile
 import time
 import db
 import app as flask_app
 
+
 class AgriCommissionManagerTestCase(unittest.TestCase):
     def setUp(self):
-        # Set up test database in memory / local test instance
+        # Create isolated temporary database for test run
+        self.db_fd, self.db_path = tempfile.mkstemp()
         db.DATABASE_URL = None
-        db.init_db()
-        self.app = flask_app.app
-        self.app.config['TESTING'] = True
+        db.DATABASE_PATH = self.db_path
+        
+        self.app = flask_app.create_app({'TESTING': True})
         self.client = self.app.test_client()
 
-    def test_01_auth_login_admin_success(self):
-        res = self.client.post('/api/login', json={'username': 'admin', 'password': 'admin'})
+        # Sign up a test user to obtain a valid JWT token for authenticated endpoints
+        res = self.client.post('/api/signup', json={
+            'name': 'Test Operator',
+            'email': 'operator@test.com',
+            'password': 'password123'
+        })
+        data = json.loads(res.data)
+        self.token = data.get('access_token') or data.get('token')
+        self.auth_headers = {'Authorization': f'Bearer {self.token}'} if self.token else {}
+
+    def tearDown(self):
+        os.close(self.db_fd)
+        if os.path.exists(self.db_path):
+            try:
+                os.remove(self.db_path)
+            except OSError:
+                pass
+
+    def test_01_auth_login_success(self):
+        res = self.client.post('/api/login', json={'email': 'operator@test.com', 'password': 'password123'})
         data = json.loads(res.data)
         self.assertEqual(res.status_code, 200)
         self.assertTrue(data['success'])
         self.assertIn('user', data)
+        self.assertIn('access_token', data)
 
     def test_02_auth_login_invalid_password(self):
-        res = self.client.post('/api/login', json={'username': 'admin', 'password': 'wrongpassword'})
+        res = self.client.post('/api/login', json={'email': 'operator@test.com', 'password': 'wrongpassword'})
         data = json.loads(res.data)
         self.assertEqual(res.status_code, 401)
         self.assertFalse(data['success'])
@@ -45,12 +67,12 @@ class AgriCommissionManagerTestCase(unittest.TestCase):
             'hamali': 10,
             'advance': 100
         }
-        res = self.client.post('/api/add-bill', json=payload)
+        res = self.client.post('/api/add-bill', json=payload, headers=self.auth_headers)
         data = json.loads(res.data)
         self.assertEqual(res.status_code, 200)
         self.assertTrue(data['success'])
 
-        res2 = self.client.get('/api/home-bills?date=2026-08-09')
+        res2 = self.client.get('/api/home-bills?date=2026-08-09', headers=self.auth_headers)
         data2 = json.loads(res2.data)
         self.assertTrue(data2['success'])
         found = [b for b in data2['bills'] if b['name'] == 'Test Kisan']
@@ -64,18 +86,18 @@ class AgriCommissionManagerTestCase(unittest.TestCase):
             'price': 50,
             'advance': 5,
             'billdate': '2026-08-09'
-        })
+        }, headers=self.auth_headers)
         self.assertEqual(res.status_code, 200)
 
-        res2 = self.client.get('/api/home-bills?date=2026-08-09')
+        res2 = self.client.get('/api/home-bills?date=2026-08-09', headers=self.auth_headers)
         data2 = json.loads(res2.data)
         target = [b for b in data2['bills'] if b['name'] == 'Update Bill Kisan'][0]
         bill_id = target['id']
 
-        res_confirm = self.client.post(f'/api/confirm-bill/{bill_id}')
+        res_confirm = self.client.post(f'/api/confirm-bill/{bill_id}', headers=self.auth_headers)
         self.assertEqual(res_confirm.status_code, 200)
 
-        res3 = self.client.get('/api/home-bills?date=2026-08-09')
+        res3 = self.client.get('/api/home-bills?date=2026-08-09', headers=self.auth_headers)
         data3 = json.loads(res3.data)
         confirmed_bill = [b for b in data3['bills'] if b['id'] == bill_id][0]
         self.assertEqual(confirmed_bill['paid'], 'YES')
@@ -87,10 +109,10 @@ class AgriCommissionManagerTestCase(unittest.TestCase):
             'price': 50,
             'advance': 10,
             'date': '2026-08-09'
-        })
+        }, headers=self.auth_headers)
         self.assertEqual(res_update.status_code, 200)
 
-        res4 = self.client.get('/api/home-bills?date=2026-08-09')
+        res4 = self.client.get('/api/home-bills?date=2026-08-09', headers=self.auth_headers)
         data4 = json.loads(res4.data)
         updated_bill = [b for b in data4['bills'] if b['id'] == bill_id][0]
         self.assertEqual(updated_bill['paid'], 'NO')
@@ -100,7 +122,7 @@ class AgriCommissionManagerTestCase(unittest.TestCase):
             'name': 'SSL',
             'date': '2026-08-09',
             'amount': 5000
-        })
+        }, headers=self.auth_headers)
         self.assertEqual(res.status_code, 200)
 
         res_multi = self.client.post('/api/add-multi-advance', json={
@@ -110,10 +132,10 @@ class AgriCommissionManagerTestCase(unittest.TestCase):
                 'BVS': 0,
                 'DPR': 1500
             }
-        })
+        }, headers=self.auth_headers)
         self.assertEqual(res_multi.status_code, 200)
 
-        res_list = self.client.get('/api/advances?date=2026-08-09')
+        res_list = self.client.get('/api/advances?date=2026-08-09', headers=self.auth_headers)
         data_list = json.loads(res_list.data)
         self.assertTrue(data_list['success'])
         names = [a['name'] for a in data_list['advances']]
@@ -136,10 +158,10 @@ class AgriCommissionManagerTestCase(unittest.TestCase):
             'lorryAdvance': 1000,
             'villageRef': 'Nakrekal'
         }
-        res = self.client.post('/api/sold-data', json=payload)
+        res = self.client.post('/api/sold-data', json=payload, headers=self.auth_headers)
         self.assertEqual(res.status_code, 200)
 
-        res_get = self.client.get('/api/sold-data?date=2026-08-09')
+        res_get = self.client.get('/api/sold-data?date=2026-08-09', headers=self.auth_headers)
         data_get = json.loads(res_get.data)
         self.assertTrue(data_get['success'])
         self.assertGreater(len(data_get['sold_data']), 0)
@@ -150,17 +172,17 @@ class AgriCommissionManagerTestCase(unittest.TestCase):
             'billdate': '2026-08-09',
             'items': [{'bags': 20, 'price': 1000}],
             'advance': 5000
-        })
+        }, headers=self.auth_headers)
         self.assertEqual(res.status_code, 200)
 
-        res_bal = self.client.get('/api/buyer-balance?year=2026')
+        res_bal = self.client.get('/api/buyer-balance?year=2026', headers=self.auth_headers)
         data_bal = json.loads(res_bal.data)
         self.assertTrue(data_bal['success'])
         self.assertIn('summary', data_bal)
         self.assertGreater(data_bal['summary']['total_amount'], 0)
 
     def test_09_sms_formatting_generator(self):
-        res = self.client.get('/api/sms-to-send?date=2026-08-09')
+        res = self.client.get('/api/sms-to-send?date=2026-08-09', headers=self.auth_headers)
         data = json.loads(res.data)
         self.assertTrue(data['success'])
         self.assertIn('sms_list', data)
@@ -192,3 +214,4 @@ class AgriCommissionManagerTestCase(unittest.TestCase):
 
 if __name__ == '__main__':
     unittest.main()
+

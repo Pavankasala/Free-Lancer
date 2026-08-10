@@ -1,226 +1,230 @@
-from flask import Blueprint, request, jsonify
-import hashlib
-import db
+import re
 
-auth_bp = Blueprint('auth', __name__)
+from flask import Blueprint, current_app, g, jsonify, request
+
+import db
+from security import (
+    create_access_token,
+    hash_password,
+    require_auth,
+    verify_google_credential,
+    verify_password,
+)
+
+
+auth_bp = Blueprint("auth", __name__)
+EMAIL_RE = re.compile(r"^[^\s@]+@[^\s@]+\.[^\s@]+$")
+
 
 def normalize_user(user_data):
-    """Formats raw database row into clean user object"""
     if not user_data:
         return None
-    u = dict(user_data) if hasattr(user_data, 'keys') else dict(user_data)
-    u.pop('password', None)
-    u['business_name'] = u.get('company_full_name') or u.get('company_name') or 'Agri Commission Manager'
-    u['owner_name'] = u.get('name') or u.get('user_name') or 'Operator'
-    u['phone'] = u.get('mobile') or ''
-    return u
+    user = dict(user_data)
+    user.pop("password", None)
+    user["business_name"] = user.get("company_full_name") or user.get("company_name") or "Agri Commission Manager"
+    user["owner_name"] = user.get("name") or user.get("user_name") or "Operator"
+    user["phone"] = user.get("mobile") or ""
+    return user
 
-@auth_bp.route('/api/login', methods=['POST'])
-@auth_bp.route('/login', methods=['POST'])
+
+def _new_username(cursor, email: str, p: str) -> str:
+    base = re.sub(r"[^a-z0-9_.-]", "", email.split("@", 1)[0].lower()) or "user"
+    table = db.user_table()
+    candidate = base[:90]
+    suffix = 1
+    while True:
+        cursor.execute(f"SELECT 1 FROM {table} WHERE LOWER(user_name) = {p}", (candidate,))
+        if not cursor.fetchone():
+            return candidate
+        suffix += 1
+        candidate = f"{base[:85]}{suffix}"
+
+
+def _response_for_user(user):
+    user_obj = normalize_user(user)
+    token = create_access_token(user_obj["user_id"])
+    return jsonify(
+        {
+            "success": True,
+            "user": user_obj,
+            "access_token": token,
+            "token": token,
+        }
+    )
+
+
+
+@auth_bp.route("/api/login", methods=["POST"])
+@auth_bp.route("/login", methods=["POST"])
 def login():
-    data = request.get_json() or {}
-    email_or_user = (data.get('email') or data.get('username') or '').strip().lower()
-    password = (data.get('password') or '').strip()
-    
+    data = request.get_json(silent=True) or {}
+    email_or_user = str(data.get("email") or data.get("username") or "").strip().lower()
+    password = str(data.get("password") or "")
     if not email_or_user or not password:
-        return jsonify({'success': False, 'message': 'Email/username and password are required'}), 400
+        return jsonify({"success": False, "message": "Email/username and password are required"}), 400
 
-    pwd_hash = hashlib.md5(password.encode()).hexdigest()
-    
     conn = db.get_db()
-    cursor = conn.cursor()
-    p = db.ph()
-    table = '"user"' if db.DATABASE_URL else 'user'
-    
-    # Unified Query matching either LOWER(user_name) or LOWER(email)
-    query = f"SELECT * FROM {table} WHERE (LOWER(user_name) = {p} OR LOWER(email) = {p}) AND password = {p}"
-    cursor.execute(query, (email_or_user, email_or_user, pwd_hash))
-    user = cursor.fetchone()
-    
-    # Admin Fallback Check
-    if not user and email_or_user in ['admin', 'admin@agricommission.com'] and password == 'admin':
-        cursor.execute(f"SELECT * FROM {table} WHERE LOWER(user_name) = 'admin' OR LOWER(email) = 'admin@agricommission.com'")
+    try:
+        cursor = conn.cursor()
+        p = db.ph()
+        table = db.user_table()
+        cursor.execute(
+            f"SELECT * FROM {table} WHERE LOWER(user_name) = {p} OR LOWER(email) = {p}",
+            (email_or_user, email_or_user),
+        )
         user = cursor.fetchone()
         if not user:
-            user = {
-                'user_id': 1,
-                'user_name': 'admin',
-                'email': 'admin@agricommission.com',
-                'name': 'Operator',
-                'user_type': 'OPE'
-            }
-    
-    conn.close()
-    
-    if user:
-        user_obj = normalize_user(user)
-        user_id = user_obj.get('user_id', 1)
-        return jsonify({
-            'success': True,
-            'user': user_obj,
-            'access_token': f"token-{user_id}"
-        })
-    else:
-        return jsonify({'success': False, 'message': 'Incorrect email/username or password'}), 401
+            return jsonify({"success": False, "message": "Incorrect email/username or password"}), 401
 
+        valid, needs_rehash = verify_password(dict(user).get("password"), password)
+        if not valid:
+            return jsonify({"success": False, "message": "Incorrect email/username or password"}), 401
 
-@auth_bp.route('/api/signup', methods=['POST'])
-@auth_bp.route('/signup', methods=['POST'])
-def signup():
-    data = request.get_json() or {}
-    name = (data.get('name') or '').strip()
-    email = (data.get('email') or '').strip().lower()
-    password = (data.get('password') or '').strip()
-    
-    if not name or not email or not password:
-        return jsonify({'success': False, 'message': 'All fields are required'}), 400
-        
-    pwd_hash = hashlib.md5(password.encode()).hexdigest()
-    user_name = email.split('@')[0]
-    
-    conn = db.get_db()
-    cursor = conn.cursor()
-    p = db.ph()
-    table = '"user"' if db.DATABASE_URL else 'user'
-    
-    # Check if user already exists by email or user_name
-    cursor.execute(f"SELECT * FROM {table} WHERE LOWER(email) = {p} OR LOWER(user_name) = {p}", (email, user_name))
-    existing = cursor.fetchone()
-    
-    if existing:
-        existing_dict = dict(existing) if hasattr(existing, 'keys') else dict(existing)
-        # Account linking: If user signed up via Google OAuth previously without a password, set their password to link accounts!
-        if not existing_dict.get('password'):
-            cursor.execute(f"UPDATE {table} SET password = {p}, name = {p} WHERE user_id = {p}", (pwd_hash, name, existing_dict['user_id']))
+        if needs_rehash:
+            cursor.execute(
+                f"UPDATE {table} SET password = {p} WHERE user_id = {p}",
+                (hash_password(password), dict(user)["user_id"]),
+            )
             conn.commit()
-            cursor.execute(f"SELECT * FROM {table} WHERE user_id = {p}", (existing_dict['user_id'],))
-            updated_user = cursor.fetchone()
-            conn.close()
-            user_obj = normalize_user(updated_user)
-            return jsonify({
-                'success': True,
-                'message': 'Account linked successfully! You can now log in with Email/Password or Google.',
-                'user': user_obj,
-                'access_token': f"token-{user_obj['user_id']}"
-            }), 200
-        else:
-            conn.close()
-            return jsonify({'success': False, 'message': 'An account with this email address already exists. Please login instead.'}), 400
+            cursor.execute(f"SELECT * FROM {table} WHERE user_id = {p}", (dict(user)["user_id"],))
+            user = cursor.fetchone()
 
-    # Create new account
-    cursor.execute(f'''
-        INSERT INTO {table} (name, email, user_name, password, user_type, auth_provider)
-        VALUES ({p}, {p}, {p}, {p}, 'OPE', 'LOCAL')
-    ''', (name, email, user_name, pwd_hash))
-    conn.commit()
-
-    cursor.execute(f"SELECT * FROM {table} WHERE LOWER(email) = {p}", (email,))
-    new_user = cursor.fetchone()
-    conn.close()
-    
-    user_obj = normalize_user(new_user)
-    user_id = user_obj.get('user_id', 1)
-
-    return jsonify({
-        'success': True,
-        'message': 'Signup successful',
-        'user': user_obj,
-        'access_token': f"token-{user_id}"
-    }), 201
+        return _response_for_user(user)
+    finally:
+        conn.close()
 
 
-@auth_bp.route('/api/google-auth', methods=['POST', 'OPTIONS'])
-@auth_bp.route('/google-auth', methods=['POST', 'OPTIONS'])
-def google_auth():
-    if request.method == 'OPTIONS':
-        return jsonify({'success': True}), 200
+@auth_bp.route("/api/signup", methods=["POST"])
+@auth_bp.route("/signup", methods=["POST"])
+def signup():
+    data = request.get_json(silent=True) or {}
+    name = str(data.get("name") or "").strip()
+    email = str(data.get("email") or "").strip().lower()
+    password = str(data.get("password") or "")
 
-    data = request.get_json() or {}
-    email = (data.get('email') or '').strip().lower()
-    name = (data.get('name') or email.split('@')[0] or 'Google User').strip()
-    
-    if not email:
-        return jsonify({'success': False, 'message': 'Invalid Google payload'}), 400
-        
+    if not name or not email or not password:
+        return jsonify({"success": False, "message": "Name, email, and password are required"}), 400
+    if not EMAIL_RE.fullmatch(email):
+        return jsonify({"success": False, "message": "Please enter a valid email address"}), 400
+    if len(password) < 8:
+        return jsonify({"success": False, "message": "Password must be at least 8 characters"}), 400
+
     conn = db.get_db()
-    cursor = conn.cursor()
-    p = db.ph()
-    table = '"user"' if db.DATABASE_URL else 'user'
-    
-    # Unified Account Linking: Check if user exists by email (case-insensitive)
-    cursor.execute(f"SELECT * FROM {table} WHERE LOWER(email) = {p}", (email,))
-    user = cursor.fetchone()
-    
-    if not user:
-        # Create user linked to Google auth
-        user_name = email.split('@')[0]
-        cursor.execute(f'''
-            INSERT INTO {table} (name, email, user_name, user_type, auth_provider)
-            VALUES ({p}, {p}, {p}, 'OPE', 'GOOGLE')
-        ''', (name, email, user_name))
-        conn.commit()
+    try:
+        cursor = conn.cursor()
+        p = db.ph()
+        table = db.user_table()
+        cursor.execute(f"SELECT user_id FROM {table} WHERE LOWER(email) = {p}", (email,))
+        if cursor.fetchone():
+            return jsonify({"success": False, "message": "An account with this email already exists. Please sign in."}), 409
 
+        user_name = _new_username(cursor, email, p)
+        cursor.execute(
+            f"""
+            INSERT INTO {table} (name, email, user_name, password, user_type, auth_provider)
+            VALUES ({p}, {p}, {p}, {p}, 'OPE', 'LOCAL')
+            """,
+            (name, email, user_name, hash_password(password)),
+        )
+        conn.commit()
         cursor.execute(f"SELECT * FROM {table} WHERE LOWER(email) = {p}", (email,))
         user = cursor.fetchone()
-        
-    conn.close()
-    
-    user_obj = normalize_user(user)
-    user_id = user_obj.get('user_id', 1)
-    
-    return jsonify({
-        'success': True,
-        'user': user_obj,
-        'access_token': f"token-{user_id}"
-    })
+        response = _response_for_user(user)
+        response.status_code = 201
+        return response
+    finally:
+        conn.close()
 
 
-@auth_bp.route('/api/update-profile', methods=['POST', 'OPTIONS'])
+@auth_bp.route("/api/google-auth", methods=["POST"])
+@auth_bp.route("/google-auth", methods=["POST"])
+def google_auth():
+    data = request.get_json(silent=True) or {}
+    credential = str(data.get("credential") or "").strip()
+
+    if not credential and current_app.config.get("APP_ENV") != "production":
+        email = str(data.get("email") or "").strip().lower()
+        if not email:
+            return jsonify({"success": False, "message": "Google credential or email is required"}), 400
+        google_user = {"email": email, "name": str(data.get("name") or email.split("@", 1)[0]).strip()}
+    else:
+        try:
+            google_user = verify_google_credential(credential)
+        except ValueError as exc:
+            message = str(exc)
+            status = 503 if "not configured" in message or "not installed" in message else 401
+            return jsonify({"success": False, "message": message}), status
+
+    email = google_user["email"]
+    conn = db.get_db()
+    try:
+        cursor = conn.cursor()
+        p = db.ph()
+        table = db.user_table()
+        cursor.execute(f"SELECT * FROM {table} WHERE LOWER(email) = {p}", (email,))
+        user = cursor.fetchone()
+
+        if not user:
+            user_name = _new_username(cursor, email, p)
+            cursor.execute(
+                f"""
+                INSERT INTO {table} (name, email, user_name, user_type, auth_provider)
+                VALUES ({p}, {p}, {p}, 'OPE', 'GOOGLE')
+                """,
+                (google_user["name"], email, user_name),
+            )
+            conn.commit()
+            cursor.execute(f"SELECT * FROM {table} WHERE LOWER(email) = {p}", (email,))
+            user = cursor.fetchone()
+        else:
+            existing = dict(user)
+            providers = {provider for provider in str(existing.get("auth_provider") or "").split(",") if provider}
+            if "GOOGLE" not in providers:
+                providers.add("GOOGLE")
+                cursor.execute(
+                    f"UPDATE {table} SET auth_provider = {p} WHERE user_id = {p}",
+                    (",".join(sorted(providers)), existing["user_id"]),
+                )
+                conn.commit()
+                cursor.execute(f"SELECT * FROM {table} WHERE user_id = {p}", (existing["user_id"],))
+                user = cursor.fetchone()
+
+        return _response_for_user(user)
+    finally:
+        conn.close()
+
+
+@auth_bp.route("/api/update-profile", methods=["POST"])
+@require_auth
 def update_profile():
-    if request.method == 'OPTIONS':
-        return jsonify({'success': True}), 200
-
-    data = request.get_json() or {}
-    user_id = data.get('user_id') or data.get('id')
-    user_name = (data.get('user_name') or 'admin').strip().lower()
-
-    name = data.get('name') or data.get('owner_name') or 'Operator'
-    company_full_name = data.get('company_full_name') or data.get('business_name') or 'Agri Commission Manager'
-    mobile = data.get('mobile') or data.get('phone') or ''
-    address = data.get('address') or ''
-    default_hamali = float(data.get('default_hamali', 0.0) or 0.0)
+    data = request.get_json(silent=True) or {}
+    name = str(data.get("name") or data.get("owner_name") or "").strip()
+    company_full_name = str(data.get("company_full_name") or data.get("business_name") or "").strip()
+    mobile = str(data.get("mobile") or data.get("phone") or "").strip()
+    address = str(data.get("address") or "").strip()
+    try:
+        default_hamali = float(data.get("default_hamali", 0) or 0)
+    except (TypeError, ValueError):
+        return jsonify({"success": False, "message": "Default hamali must be a number"}), 400
+    if default_hamali < 0:
+        return jsonify({"success": False, "message": "Default hamali cannot be negative"}), 400
 
     conn = db.get_db()
-    cursor = conn.cursor()
-    p = db.ph()
-    table = '"user"' if db.DATABASE_URL else 'user'
-
-    if user_id:
-        cursor.execute(f'''
+    try:
+        cursor = conn.cursor()
+        p = db.ph()
+        table = db.user_table()
+        cursor.execute(
+            f"""
             UPDATE {table}
             SET name = {p}, company_full_name = {p}, mobile = {p}, address = {p}, default_hamali = {p}
             WHERE user_id = {p}
-        ''', (name, company_full_name, mobile, address, default_hamali, user_id))
-    else:
-        cursor.execute(f'''
-            UPDATE {table}
-            SET name = {p}, company_full_name = {p}, mobile = {p}, address = {p}, default_hamali = {p}
-            WHERE LOWER(user_name) = {p}
-        ''', (name, company_full_name, mobile, address, default_hamali, user_name))
-
-    conn.commit()
-
-    if user_id:
-        cursor.execute(f"SELECT * FROM {table} WHERE user_id = {p}", (user_id,))
-    else:
-        cursor.execute(f"SELECT * FROM {table} WHERE LOWER(user_name) = {p}", (user_name,))
-
-    updated_user = cursor.fetchone()
-    conn.close()
-
-    user_obj = normalize_user(updated_user)
-    return jsonify({
-        'success': True,
-        'message': 'Profile updated successfully',
-        'user': user_obj
-    })
+            """,
+            (name, company_full_name, mobile, address, default_hamali, g.user_id),
+        )
+        conn.commit()
+        cursor.execute(f"SELECT * FROM {table} WHERE user_id = {p}", (g.user_id,))
+        user = cursor.fetchone()
+        return jsonify({"success": True, "message": "Profile updated successfully", "user": normalize_user(user)})
+    finally:
+        conn.close()

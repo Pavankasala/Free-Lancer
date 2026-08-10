@@ -17,43 +17,19 @@ export default function Expenditures({ user, onLogout }) {
   const [singleSearched, setSingleSearched] = useState(false);
   const [rangeSearched, setRangeSearched] = useState(false);
 
-  const getLocalExpenditures = () => {
-    try {
-      const saved = localStorage.getItem('agri_local_expenditures');
-      return saved ? JSON.parse(saved) : [];
-    } catch (e) {
-      return [];
-    }
-  };
-
-  const saveLocalExpenditure = (exp) => {
-    try {
-      const current = getLocalExpenditures();
-      localStorage.setItem('agri_local_expenditures', JSON.stringify([exp, ...current]));
-    } catch (e) {}
-  };
-
   const handleAddSubmit = async (e) => {
     e.preventDefault();
     if (Number(amount) < 0) {
       alert("Invalid input! Expenditure amount cannot be negative.");
       return;
     }
-    const newExp = { id: Date.now(), date: edate, description: reason, amount: Number(amount) || 0 };
     try {
-      const res = await axios.post(`${API_BASE_URL}/api/expenditures`, {
+      await axios.post(`${API_BASE_URL}/api/expenditures`, {
         date: edate,
         description: reason,
         amount: amount
       });
-      if (res.data && res.data.success) {
-        saveLocalExpenditure(res.data.expenditure || newExp);
-      } else {
-        saveLocalExpenditure(newExp);
-      }
-    } catch (err) {
-      saveLocalExpenditure(newExp);
-    }
+    } catch (err) {}
     alert('Expenditure added successfully');
     setAmount('');
     setReason('');
@@ -61,32 +37,26 @@ export default function Expenditures({ user, onLogout }) {
   };
 
   const fetchSingleDate = async () => {
-    const local = getLocalExpenditures().filter(e => e.date === singleDate);
     try {
       const res = await axios.get(`${API_BASE_URL}/api/expenditures?date=${singleDate}`);
       if (res.data && res.data.success) {
-        const apiExp = res.data.expenditures || [];
-        setSingleList([...local, ...apiExp]);
-        setSingleSearched(true);
-        return;
+        setSingleList(res.data.expenditures || []);
       }
-    } catch (err) {}
-    setSingleList(local);
+    } catch (err) {
+      setSingleList([]);
+    }
     setSingleSearched(true);
   };
 
   const fetchRangeDate = async () => {
-    const local = getLocalExpenditures().filter(e => e.date >= fromDate && e.date <= toDate);
     try {
       const res = await axios.get(`${API_BASE_URL}/api/expenditures?fromDate=${fromDate}&toDate=${toDate}`);
       if (res.data && res.data.success) {
-        const apiExp = res.data.expenditures || [];
-        setRangeList([...local, ...apiExp]);
-        setRangeSearched(true);
-        return;
+        setRangeList(res.data.expenditures || []);
       }
-    } catch (err) {}
-    setRangeList(local);
+    } catch (err) {
+      setRangeList([]);
+    }
     setRangeSearched(true);
   };
 

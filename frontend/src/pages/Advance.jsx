@@ -1,5 +1,7 @@
 import React, { useState, useEffect } from 'react';
+import axios from 'axios';
 import Header from '../components/Header';
+import { API_BASE_URL } from '../api/config';
 
 const DEFAULT_KISANS = [
   'SSL', 'pmr', 'allamma', 'CHR', 'PLR', 'ARR', 'DPR', 'NB',
@@ -32,18 +34,21 @@ export default function Advance({ user, onLogout }) {
   const [kisanOptions, setKisanOptions] = useState(DEFAULT_KISANS);
 
   useEffect(() => {
-    try {
-      const savedBills = localStorage.getItem('agri_local_bills');
-      if (savedBills) {
-        const bills = JSON.parse(savedBills);
-        const namesFromBills = bills.map(b => b.name).filter(Boolean);
-        const unique = Array.from(new Set([...DEFAULT_KISANS, ...namesFromBills]));
-        setKisanOptions(unique);
-      }
-    } catch (e) {}
+    const fetchKisans = async () => {
+      try {
+        const res = await axios.get(`${API_BASE_URL}/api/home-bills`);
+        if (res.data && res.data.success && Array.isArray(res.data.bills)) {
+          const namesFromBills = res.data.bills.map(b => b.name).filter(Boolean);
+          const unique = Array.from(new Set([...DEFAULT_KISANS, ...namesFromBills]));
+          setKisanOptions(unique);
+        }
+      } catch (e) {}
+    };
+    fetchKisans();
   }, []);
 
-  const handleSingleSubmit = (e) => {
+
+  const handleSingleSubmit = async (e) => {
     e.preventDefault();
     if (!selectedKisan) {
       alert("Please select a Kisan");
@@ -55,31 +60,21 @@ export default function Advance({ user, onLogout }) {
     }
 
     try {
-      const current = localStorage.getItem('agri_local_bills');
-      const parsed = current ? JSON.parse(current) : [];
-      let updated;
-
       if (editingAdvanceId) {
-        updated = parsed.map(b => b.id === editingAdvanceId ? { ...b, name: selectedKisan, date: advanceDate, billdate: advanceDate, advance: Number(singleAmount) || 0 } : b);
-        alert(`Advance updated successfully for ${selectedKisan}`);
-      } else {
-        const newBill = {
-          id: Date.now(),
+        await axios.put(`${API_BASE_URL}/api/update-advance/${editingAdvanceId}`, {
           name: selectedKisan,
           date: advanceDate,
-          billdate: advanceDate,
-          time: '12:00 PM',
-          no_of_bags: 0,
-          price: 0,
-          advance: Number(singleAmount) || 0,
-          paid: 'NO',
-          type: 'BUY'
-        };
-        updated = [newBill, ...parsed];
+          amount: Number(singleAmount) || 0
+        });
+        alert(`Advance updated successfully for ${selectedKisan}`);
+      } else {
+        await axios.post(`${API_BASE_URL}/api/advance`, {
+          name: selectedKisan,
+          date: advanceDate,
+          amount: Number(singleAmount) || 0
+        });
         alert(`Advance of ₹${singleAmount} added for ${selectedKisan}`);
       }
-
-      localStorage.setItem('agri_local_bills', JSON.stringify(updated));
     } catch (err) {}
 
     setEditingAdvanceId(null);
@@ -95,39 +90,29 @@ export default function Advance({ user, onLogout }) {
     }));
   };
 
-  const handleMultiSubmit = (e) => {
+  const handleMultiSubmit = async (e) => {
     e.preventDefault();
-    const newBills = [];
+    const activeAdvances = {};
     Object.entries(multiAdvances).forEach(([kisan, val]) => {
       const amt = Number(val);
       if (amt > 0) {
-        newBills.push({
-          id: Date.now() + Math.random(),
-          name: kisan,
-          date: multiDate,
-          billdate: multiDate,
-          time: '12:00 PM',
-          no_of_bags: 0,
-          price: 0,
-          advance: amt,
-          paid: 'NO',
-          type: 'BUY'
-        });
+        activeAdvances[kisan] = amt;
       }
     });
 
-    if (newBills.length === 0) {
+    if (Object.keys(activeAdvances).length === 0) {
       alert("Please enter advance amount greater than 0 for at least one Kisan");
       return;
     }
 
     try {
-      const current = localStorage.getItem('agri_local_bills');
-      const parsed = current ? JSON.parse(current) : [];
-      localStorage.setItem('agri_local_bills', JSON.stringify([...newBills, ...parsed]));
+      await axios.post(`${API_BASE_URL}/api/add-multi-advance`, {
+        date: multiDate,
+        advances: activeAdvances
+      });
+      alert(`Multi Advance saved for ${Object.keys(activeAdvances).length} kisans successfully`);
     } catch (err) {}
 
-    alert(`Multi Advance saved for ${newBills.length} kisans successfully`);
     fetchAdvanceDetails();
   };
 
@@ -135,7 +120,7 @@ export default function Advance({ user, onLogout }) {
     setEditingAdvanceId(item.id);
     setSelectedKisan(item.name || '');
     setAdvanceDate(item.date || item.billdate || advanceDate);
-    setSingleAmount(String(item.advance || 0));
+    setSingleAmount(String(item.advance || item.amount || 0));
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
@@ -145,29 +130,20 @@ export default function Advance({ user, onLogout }) {
     setSingleAmount('0');
   };
 
-  const handleDeleteAdvance = (id) => {
-    try {
-      const current = localStorage.getItem('agri_local_bills');
-      const parsed = current ? JSON.parse(current) : [];
-      const updated = parsed.filter(b => b.id !== id);
-      localStorage.setItem('agri_local_bills', JSON.stringify(updated));
-    } catch (e) {}
+  const handleDeleteAdvance = async (id) => {
     setAdvanceList(prev => prev.filter(b => b.id !== id));
+    try {
+      await axios.delete(`${API_BASE_URL}/api/delete-advance/${id}`);
+      fetchAdvanceDetails();
+    } catch (e) {}
   };
 
-  const fetchAdvanceDetails = () => {
+  const fetchAdvanceDetails = async () => {
     try {
-      const saved = localStorage.getItem('agri_local_bills');
-      const allBills = saved ? JSON.parse(saved) : [];
-      
-      const filtered = allBills.filter(b => {
-        const hasAdvance = Number(b.advance) > 0;
-        const matchesDate = !filterDate || b.date === filterDate || b.billdate === filterDate;
-        const matchesKisan = !filterKisan || (b.name || '').toLowerCase().includes(filterKisan.toLowerCase());
-        return hasAdvance && matchesDate && matchesKisan;
-      });
-
-      setAdvanceList(filtered);
+      const res = await axios.get(`${API_BASE_URL}/api/advances?date=${filterDate}&kisan=${filterKisan}`);
+      if (res.data && res.data.success) {
+        setAdvanceList(res.data.advances || []);
+      }
     } catch (e) {
       setAdvanceList([]);
     }

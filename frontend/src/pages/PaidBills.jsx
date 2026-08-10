@@ -8,30 +8,21 @@ export default function PaidBills({ user, onLogout }) {
   const [bills, setBills] = useState([]);
   const [searched, setSearched] = useState(false);
 
-  const getLocalBills = () => {
-    try {
-      const saved = localStorage.getItem('agri_local_bills');
-      return saved ? JSON.parse(saved) : [];
-    } catch (e) {
-      return [];
-    }
-  };
-
   const handleGetPaidBills = async (e) => {
     e.preventDefault();
-    const local = getLocalBills().filter(b => b.date === date && b.paid === 'YES');
     try {
       const res = await axios.get(`${API_BASE_URL}/api/home-bills?date=${date}`);
       if (res.data && res.data.success) {
         const apiBills = (res.data.bills || []).filter(b => b.paid === 'YES');
-        setBills([...local, ...apiBills]);
+        setBills(apiBills);
         setSearched(true);
         return;
       }
-    } catch (err) {}
-    setBills(local);
+    } catch (e) {}
+    setBills([]);
     setSearched(true);
   };
+
 
   return (
     <div style={{ fontFamily: "'Times New Roman', Times, serif", backgroundColor: '#f8fafc', minHeight: '100vh' }}>

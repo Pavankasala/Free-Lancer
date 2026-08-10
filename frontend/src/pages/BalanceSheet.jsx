@@ -15,63 +15,34 @@ export default function BalanceSheet({ user, onLogout }) {
 
   const fetchBalanceSheet = async (e) => {
     if (e) e.preventDefault();
-
-    // Pull Buyer Bills from Buyers Details page storage
-    let buyerBills = [];
     try {
-      const saved = localStorage.getItem('agri_local_buyer_bills');
-      buyerBills = saved ? JSON.parse(saved) : [];
-    } catch (err) {
-      buyerBills = [];
-    }
-
-    // Filter by selected year
-    const yearBills = buyerBills.filter(b => {
-      const bDate = b.date || b.billdate || '';
-      return bDate.startsWith(selectedYear);
-    });
-
-    const totalNewAmount = yearBills.reduce((acc, b) => acc + (Number(b.no_of_bags) * Number(b.price) || 0), 0);
-    const totalCashPaid = yearBills.reduce((acc, b) => acc + (b.paid === 'YES' ? (Number(b.no_of_bags) * Number(b.price)) : Number(b.advance || 0)), 0);
-    const presentBalance = totalNewAmount - totalCashPaid;
-
-    const rows = yearBills.map(b => {
-      const total = Number(b.no_of_bags) * Number(b.price) || 0;
-      const paid = b.paid === 'YES' ? total : Number(b.advance || 0);
-      return {
-        date: b.date || b.billdate || `${selectedYear}-01-01`,
-        buyerName: b.name || 'Buyer',
-        bags: b.no_of_bags,
-        total: total,
-        paid: paid,
-        pending: total - paid
-      };
-    });
-
-    // Fallback if empty
-    if (rows.length === 0) {
-      try {
-        const res = await axios.get(`${API_BASE_URL}/api/balance-sheet?date=${selectedYear}-01-01`);
-        if (res.data && res.data.success) {
-          const apiTotal = res.data.total_buy || 0.00;
-          const apiCash = res.data.total_cash || 0.00;
-          setData({
-            rows: [
-              { date: `${selectedYear}-08-08`, buyerName: 'Buyers Total', bags: 0, total: apiTotal, paid: apiCash, pending: apiTotal - apiCash }
-            ],
-            oldBalance: 0.00,
-            cashPaid: apiCash,
-            newAmount: apiTotal,
-            presentBalance: apiTotal - apiCash
-          });
-          setSearched(true);
-          return;
-        }
-      } catch (err) {}
-    }
+      const res = await axios.get(`${API_BASE_URL}/api/buyer-balance?year=${selectedYear}`);
+      if (res.data && res.data.success) {
+        const rows = (res.data.buyers || []).map(b => ({
+          date: b.date || `${selectedYear}-01-01`,
+          buyerName: b.name || b.sold_to || 'Buyer',
+          bags: b.no_of_bags || 0,
+          total: b.total_amount || 0,
+          paid: b.paid_amount || 0,
+          pending: b.pending_amount || 0
+        }));
+        const summary = res.data.summary || {};
+        setData({
+          rows: rows.length > 0 ? rows : [
+            { date: `${selectedYear}-01-01`, buyerName: 'No Buyer Bills', bags: 0, total: 0.00, paid: 0.00, pending: 0.00 }
+          ],
+          oldBalance: 0.00,
+          cashPaid: summary.paid_amount || 0,
+          newAmount: summary.total_amount || 0,
+          presentBalance: summary.pending_amount || 0
+        });
+        setSearched(true);
+        return;
+      }
+    } catch (err) {}
 
     setData({
-      rows: rows.length > 0 ? rows : [
+      rows: [
         { date: `${selectedYear}-01-01`, buyerName: 'No Buyer Bills', bags: 0, total: 0.00, paid: 0.00, pending: 0.00 }
       ],
       oldBalance: 0.00,

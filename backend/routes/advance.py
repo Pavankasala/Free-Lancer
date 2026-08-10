@@ -1,92 +1,164 @@
-from flask import Blueprint, request, jsonify
+import math
 from datetime import datetime
+
+from flask import Blueprint, g, jsonify, request
+
 import db
+from security import require_auth
 
-advance_bp = Blueprint('advance', __name__)
 
-@advance_bp.route('/api/advances', methods=['GET'])
-@advance_bp.route('/api/advance', methods=['GET', 'POST'])
+advance_bp = Blueprint("advance", __name__)
+
+
+def _amount(value):
+    try:
+        amount = float(value or 0)
+    except (TypeError, ValueError):
+        raise ValueError("Advance amount must be a number")
+    if not math.isfinite(amount) or amount <= 0:
+        raise ValueError("Advance amount must be greater than zero")
+    return amount
+
+
+@advance_bp.route("/api/advances", methods=["GET"])
+@advance_bp.route("/api/advance", methods=["GET", "POST"])
+@require_auth
 def handle_advance():
-    conn = db.get_db()
-    cursor = conn.cursor()
-    p = db.ph()
+    if request.method == "POST":
+        data = request.get_json(silent=True) or {}
+        name = str(data.get("name") or "").strip()
+        if not name:
+            return jsonify({"success": False, "message": "Kisan name is required"}), 400
+        try:
+            amount = _amount(data.get("amount", data.get("advance")))
+        except ValueError as exc:
+            return jsonify({"success": False, "message": str(exc)}), 400
 
-    if request.method == 'POST':
-        data = request.get_json() or {}
-        name = data.get('name', '').strip()
-        adv_date = data.get('date', datetime.now().strftime('%Y-%m-%d'))
-        amount = float(data.get('amount', 0.0) or data.get('advance', 0.0) or 0.0)
-        billtime = data.get('time', '12:00 PM')
-        
-        cursor.execute(f"INSERT INTO inventory (name, date, time, type, advance, paid) VALUES ({p}, {p}, {p}, 'ADVANCE', {p}, 'NO')", (name, adv_date, billtime, amount))
-        conn.commit()
+        advance_date = str(data.get("date") or datetime.now().strftime("%Y-%m-%d"))
+        bill_time = str(data.get("time") or "12:00 PM")
+        conn = db.get_db()
+        try:
+            cursor = conn.cursor()
+            p = db.ph()
+            cursor.execute(
+                f"""
+                INSERT INTO inventory (user_id, name, date, time, type, advance, paid, confirmed)
+                VALUES ({p}, {p}, {p}, {p}, 'ADVANCE', {p}, 'NO', {p})
+                """,
+                (g.user_id, name, advance_date, bill_time, amount, False),
+            )
+            conn.commit()
+            return jsonify({"success": True, "message": "Advance added successfully"}), 200
+        finally:
+            conn.close()
+
+    date = request.args.get("date", "").strip()
+    kisan = request.args.get("kisan", "").strip()
+    conn = db.get_db()
+    try:
+        cursor = conn.cursor()
+        p = db.ph()
+        query = f"SELECT * FROM inventory WHERE user_id = {p} AND type = 'ADVANCE'"
+        params = [g.user_id]
+        if date:
+            query += f" AND date = {p}"
+            params.append(date)
+        if kisan:
+            query += f" AND LOWER(name) LIKE {p}"
+            params.append(f"%{kisan.lower()}%")
+        query += " ORDER BY id DESC"
+        cursor.execute(query, tuple(params))
+        return jsonify({"success": True, "advances": [dict(row) for row in cursor.fetchall()]})
+    finally:
         conn.close()
-        return jsonify({'success': True, 'message': 'Advance added successfully'})
-        
-    date = request.args.get('date')
-    kisan = request.args.get('kisan')
 
-    query = "SELECT * FROM inventory WHERE (type = 'ADVANCE' OR advance > 0)"
-    params = []
 
-    if date:
-        query += f" AND date = {p}"
-        params.append(date)
-    if kisan:
-        query += f" AND LOWER(name) LIKE {p}"
-        params.append(f"%{kisan.lower()}%")
-
-    query += " ORDER BY id DESC"
-
-    cursor.execute(query, tuple(params))
-    rows = cursor.fetchall()
-    conn.close()
-    return jsonify({'success': True, 'advances': [dict(r) for r in rows]})
-
-@advance_bp.route('/api/add-multi-advance', methods=['POST'])
+@advance_bp.route("/api/add-multi-advance", methods=["POST"])
+@require_auth
 def add_multi_advance():
-    data = request.get_json() or {}
-    adv_date = data.get('date', datetime.now().strftime('%Y-%m-%d'))
-    items = data.get('advances', {})  # { 'AVR': 3000, 'BVS': 260 }
+    data = request.get_json(silent=True) or {}
+    items = data.get("advances")
+    if not isinstance(items, dict):
+        return jsonify({"success": False, "message": "Advances must be a Kisan-to-amount object"}), 400
 
+    valid_items = []
+    for kisan, value in items.items():
+        name = str(kisan or "").strip()
+        if not name:
+            continue
+        try:
+            amount = _amount(value)
+        except ValueError:
+            continue
+        valid_items.append((name, amount))
+
+    if not valid_items:
+        return jsonify({"success": False, "message": "Enter an amount greater than zero for at least one Kisan"}), 400
+
+    advance_date = str(data.get("date") or datetime.now().strftime("%Y-%m-%d"))
     conn = db.get_db()
-    cursor = conn.cursor()
-    p = db.ph()
+    try:
+        cursor = conn.cursor()
+        p = db.ph()
+        for name, amount in valid_items:
+            cursor.execute(
+                f"""
+                INSERT INTO inventory (user_id, name, date, time, type, advance, paid, confirmed)
+                VALUES ({p}, {p}, {p}, '12:00 PM', 'ADVANCE', {p}, 'NO', {p})
+                """,
+                (g.user_id, name, advance_date, amount, False),
+            )
+        conn.commit()
+        return jsonify({"success": True, "message": f"Multi advance added for {len(valid_items)} Kis­ans"}), 200
+    finally:
+        conn.close()
 
-    inserted_count = 0
-    for kisan, val in items.items():
-        amt = float(val or 0.0)
-        if amt > 0:
-            cursor.execute(f"INSERT INTO inventory (name, date, time, type, advance, paid) VALUES ({p}, {p}, '12:00 PM', 'ADVANCE', {p}, 'NO')", (kisan, adv_date, amt))
-            inserted_count += 1
 
-    conn.commit()
-    conn.close()
-    return jsonify({'success': True, 'message': f'Multi advance added for {inserted_count} kisans'})
-
-@advance_bp.route('/api/update-advance/<int:adv_id>', methods=['PUT', 'POST'])
+@advance_bp.route("/api/update-advance/<int:adv_id>", methods=["PUT"])
+@require_auth
 def update_advance(adv_id):
-    data = request.get_json() or {}
-    name = data.get('name', '').strip()
-    amount = float(data.get('amount', 0.0) or data.get('advance', 0.0) or 0.0)
-    adv_date = data.get('date', '')
+    data = request.get_json(silent=True) or {}
+    name = str(data.get("name") or "").strip()
+    if not name:
+        return jsonify({"success": False, "message": "Kisan name is required"}), 400
+    try:
+        amount = _amount(data.get("amount", data.get("advance")))
+    except ValueError as exc:
+        return jsonify({"success": False, "message": str(exc)}), 400
 
     conn = db.get_db()
-    cursor = conn.cursor()
-    p = db.ph()
+    try:
+        cursor = conn.cursor()
+        p = db.ph()
+        cursor.execute(
+            f"""
+            UPDATE inventory SET name = {p}, advance = {p}, date = {p}
+            WHERE id = {p} AND user_id = {p} AND type = 'ADVANCE'
+            """,
+            (name, amount, str(data.get("date") or ""), adv_id, g.user_id),
+        )
+        if cursor.rowcount != 1:
+            return jsonify({"success": False, "message": "Advance not found"}), 404
+        conn.commit()
+        return jsonify({"success": True, "message": "Advance updated successfully"})
+    finally:
+        conn.close()
 
-    cursor.execute(f"UPDATE inventory SET name = {p}, advance = {p}, date = {p} WHERE id = {p}", (name, amount, adv_date, adv_id))
-    conn.commit()
-    conn.close()
-    return jsonify({'success': True, 'message': 'Advance updated successfully'})
 
-@advance_bp.route('/api/delete-advance/<int:adv_id>', methods=['DELETE', 'POST'])
+@advance_bp.route("/api/delete-advance/<int:adv_id>", methods=["DELETE"])
+@require_auth
 def delete_advance(adv_id):
     conn = db.get_db()
-    cursor = conn.cursor()
-    p = db.ph()
-
-    cursor.execute(f"DELETE FROM inventory WHERE id = {p}", (adv_id,))
-    conn.commit()
-    conn.close()
-    return jsonify({'success': True, 'message': 'Advance deleted successfully'})
+    try:
+        cursor = conn.cursor()
+        p = db.ph()
+        cursor.execute(
+            f"DELETE FROM inventory WHERE id = {p} AND user_id = {p} AND type = 'ADVANCE'",
+            (adv_id, g.user_id),
+        )
+        if cursor.rowcount != 1:
+            return jsonify({"success": False, "message": "Advance not found"}), 404
+        conn.commit()
+        return jsonify({"success": True, "message": "Advance deleted successfully"})
+    finally:
+        conn.close()

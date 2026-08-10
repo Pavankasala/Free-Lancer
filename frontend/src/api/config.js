@@ -1,6 +1,20 @@
+import axios from 'axios';
+
 // Centralized API Base URL configuration
 // Reads VITE_API_BASE_URL or defaults to your live deployed Render backend
 export const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || 'https://agri-commission-manager.onrender.com').replace(/\/+$/, '');
+
+// Automatically attach Authorization JWT token to all API requests
+axios.interceptors.request.use((config) => {
+  try {
+    const token = localStorage.getItem('token');
+    if (token) {
+      config.headers['Authorization'] = `Bearer ${token}`;
+    }
+  } catch (e) {}
+  return config;
+}, (error) => Promise.reject(error));
+
 
 export const API_ENDPOINTS = {
   LOGIN: `${API_BASE_URL}/api/login`,

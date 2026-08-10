@@ -1,33 +1,43 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import axios from 'axios';
 import Header from '../components/Header';
+import BillModal from '../components/BillModal';
+import { API_BASE_URL } from '../api/config';
 
 export default function KisanBalance({ user, onLogout }) {
   const [selectedYear, setSelectedYear] = useState('2026');
   const [kisanName, setKisanName] = useState('');
   const [balanceData, setBalanceData] = useState([]);
   const [searched, setSearched] = useState(false);
+  const [selectedBill, setSelectedBill] = useState(null);
 
   const years = [];
   for (let y = 2017; y <= 2060; y++) {
     years.push(y);
   }
 
-  const handleGetBalance = () => {
+  const handleGetBalance = async () => {
     try {
-      const saved = localStorage.getItem('agri_local_bills');
-      const allBills = saved ? JSON.parse(saved) : [];
-      const filtered = allBills.filter(b => {
-        const matchesName = !kisanName || (b.name || '').toLowerCase().includes(kisanName.toLowerCase());
-        const bDate = b.date || b.billdate || '';
-        const matchesYear = !selectedYear || bDate.startsWith(selectedYear);
-        return matchesName && matchesYear;
-      });
-      setBalanceData(filtered);
+      const res = await axios.get(`${API_BASE_URL}/api/home-bills`);
+      if (res.data && res.data.success) {
+        const allBills = res.data.bills || [];
+        const filtered = allBills.filter(b => {
+          const matchesName = !kisanName || (b.name || '').toLowerCase().includes(kisanName.toLowerCase());
+          const bDate = b.date || b.billdate || '';
+          const matchesYear = !selectedYear || bDate.startsWith(selectedYear);
+          return matchesName && matchesYear;
+        });
+        setBalanceData(filtered);
+      }
     } catch (e) {
       setBalanceData([]);
     }
     setSearched(true);
   };
+
+  useEffect(() => {
+    handleGetBalance();
+  }, [selectedYear]);
 
   return (
     <div style={{ fontFamily: "'Times New Roman', Times, serif", backgroundColor: '#f8fafc', minHeight: '100vh' }}>
@@ -91,12 +101,13 @@ export default function KisanBalance({ user, onLogout }) {
                     <th style={{ padding: '8px', textAlign: 'right' }}>Total Bills Amount (₹)</th>
                     <th style={{ padding: '8px', textAlign: 'right' }}>Advance Paid (₹)</th>
                     <th style={{ padding: '8px', textAlign: 'right' }}>Net Balance (₹)</th>
+                    <th style={{ padding: '8px', textAlign: 'center' }}>Action</th>
                   </tr>
                 </thead>
                 <tbody>
                   {balanceData.length === 0 ? (
                     <tr>
-                      <td colSpan="5" align="center" style={{ padding: '16px', color: '#dc2626', fontWeight: 'bold' }}>
+                      <td colSpan="6" align="center" style={{ padding: '16px', color: '#dc2626', fontWeight: 'bold' }}>
                         No Kisan ledger records found for {selectedYear}.
                       </td>
                     </tr>
@@ -112,6 +123,15 @@ export default function KisanBalance({ user, onLogout }) {
                           <td style={{ padding: '8px', textAlign: 'right' }}>₹{total.toLocaleString()}</td>
                           <td style={{ padding: '8px', textAlign: 'right', color: '#dc2626' }}>₹{advance.toLocaleString()}</td>
                           <td style={{ padding: '8px', textAlign: 'right', fontWeight: 'bold', color: '#16a34a' }}>₹{net.toLocaleString()}</td>
+                          <td style={{ padding: '8px', textAlign: 'center' }}>
+                            <button
+                              type="button"
+                              onClick={() => setSelectedBill(b)}
+                              style={{ backgroundColor: '#2563eb', color: '#ffffff', border: 'none', borderRadius: '4px', padding: '4px 10px', cursor: 'pointer', fontSize: '12px', fontWeight: 'bold' }}
+                            >
+                              🖨️ Print Bill
+                            </button>
+                          </td>
                         </tr>
                       );
                     })
@@ -122,6 +142,8 @@ export default function KisanBalance({ user, onLogout }) {
           </div>
         )}
       </div>
+
+      <BillModal bill={selectedBill} onClose={() => setSelectedBill(null)} />
     </div>
   );
 }

@@ -1,70 +1,128 @@
-from flask import Blueprint, request, jsonify
+import math
 from datetime import datetime
+
+from flask import Blueprint, g, jsonify, request
+
 import db
+from security import require_auth
 
-shops_bp = Blueprint('shops', __name__)
 
-@shops_bp.route('/api/shops', methods=['GET', 'POST'])
+shops_bp = Blueprint("shops", __name__)
+
+
+def _number(value, field):
+    try:
+        number = float(value or 0)
+    except (TypeError, ValueError):
+        raise ValueError(f"{field} must be a number")
+    if not math.isfinite(number) or number < 0:
+        raise ValueError(f"{field} cannot be negative")
+    return number
+
+
+@shops_bp.route("/api/shops", methods=["GET", "POST"])
+@require_auth
 def handle_shops():
     conn = db.get_db()
-    cursor = conn.cursor()
-    p = db.ph()
+    try:
+        cursor = conn.cursor()
+        p = db.ph()
+        if request.method == "POST":
+            data = request.get_json(silent=True) or {}
+            name = str(data.get("name") or "").strip()
+            if not name:
+                return jsonify({"success": False, "message": "Shop name is required"}), 400
+            try:
+                bags = int(_number(data.get("bags"), "Bags"))
+                price = _number(data.get("price"), "Price")
+                advance = _number(data.get("advance"), "Advance")
+            except ValueError as exc:
+                return jsonify({"success": False, "message": str(exc)}), 400
+            sale_date = str(data.get("date") or datetime.now().strftime("%Y-%m-%d"))
+            city = str(data.get("city") or "").strip()
+            mobile = str(data.get("mobile") or "").strip()
+            cursor.execute(
+                f"INSERT INTO shops (user_id, name, city, mobile) VALUES ({p}, {p}, {p}, {p})",
+                (g.user_id, name, city, mobile),
+            )
+            cursor.execute(
+                f"""
+                INSERT INTO inventory (user_id, name, mobile, no_of_bags, price, date, type, advance, paid, confirmed)
+                VALUES ({p}, {p}, {p}, {p}, {p}, {p}, 'SHOP', {p}, 'NO', {p})
+                """,
+                (g.user_id, name, mobile, bags, price, sale_date, advance, False),
+            )
+            conn.commit()
+            return jsonify({"success": True, "message": "Shop bill added"}), 201
 
-    if request.method == 'POST':
-        data = request.get_json() or {}
-        date = data.get('date', datetime.now().strftime('%Y-%m-%d'))
-        name = data.get('name', '').strip()
-        bags = int(data.get('bags', 0) or 0)
-        price = float(data.get('price', 0.0) or 0.0)
-        advance = float(data.get('advance', 0.0) or 0.0)
-        cursor.execute(f"INSERT INTO shops (name, city, mobile) VALUES ({p}, '', '')", (name,))
-        cursor.execute(f"INSERT INTO inventory (name, no_of_bags, price, date, type, advance) VALUES ({p}, {p}, {p}, {p}, 'SHOP', {p})", (name, bags, price, date, advance))
-        conn.commit()
+        date = request.args.get("date", "").strip()
+        name = request.args.get("name", "").strip()
+        year = request.args.get("year", "").strip()
+        query = f"SELECT * FROM inventory WHERE user_id = {p} AND type = 'SHOP'"
+        params = [g.user_id]
+        if date:
+            query += f" AND date = {p}"
+            params.append(date)
+        if year:
+            query += f" AND date LIKE {p}"
+            params.append(f"{year}%")
+        if name:
+            query += f" AND LOWER(name) LIKE {p}"
+            params.append(f"%{name.lower()}%")
+        query += " ORDER BY date DESC, id DESC"
+        cursor.execute(query, tuple(params))
+        return jsonify({"success": True, "shops": [dict(row) for row in cursor.fetchall()]})
+    finally:
         conn.close()
-        return jsonify({'success': True, 'message': 'Shop bill added'})
-        
-    date = request.args.get('date', datetime.now().strftime('%Y-%m-%d'))
-    cursor.execute(f"SELECT * FROM inventory WHERE type = 'SHOP' AND date = {p} ORDER BY id DESC", (date,))
-    rows = cursor.fetchall()
-    conn.close()
-    return jsonify({'success': True, 'shops': [dict(r) for r in rows]})
 
-@shops_bp.route('/api/kisans', methods=['GET', 'POST'])
+
+@shops_bp.route("/api/kisans", methods=["GET", "POST"])
+@require_auth
 def handle_kisans():
     conn = db.get_db()
-    cursor = conn.cursor()
-    p = db.ph()
+    try:
+        cursor = conn.cursor()
+        p = db.ph()
+        if request.method == "POST":
+            data = request.get_json(silent=True) or {}
+            name = str(data.get("name") or "").strip()
+            mobile = str(data.get("mobile") or "").strip()
+            if not name:
+                return jsonify({"success": False, "message": "Kisan name is required"}), 400
+            cursor.execute(
+                f"INSERT INTO kisans (user_id, name, mobile) VALUES ({p}, {p}, {p})",
+                (g.user_id, name, mobile),
+            )
+            conn.commit()
+            return jsonify({"success": True, "message": "Kisan added successfully"}), 201
 
-    if request.method == 'POST':
-        data = request.get_json() or {}
-        name = data.get('name', '').strip()
-        mobile = data.get('mobile', '').strip()
-        cursor.execute(f"INSERT INTO kisans (name, mobile) VALUES ({p}, {p})", (name, mobile))
-        conn.commit()
+        cursor.execute(f"SELECT * FROM kisans WHERE user_id = {p} ORDER BY name COLLATE NOCASE", (g.user_id,)) if not db.using_postgres() else cursor.execute(f"SELECT * FROM kisans WHERE user_id = {p} ORDER BY LOWER(name)", (g.user_id,))
+        return jsonify({"success": True, "kisans": [dict(row) for row in cursor.fetchall()]})
+    finally:
         conn.close()
-        return jsonify({'success': True, 'message': 'Kisan added successfully'})
 
-    cursor.execute("SELECT * FROM kisans ORDER BY id DESC")
-    rows = cursor.fetchall()
-    conn.close()
-    return jsonify({'success': True, 'kisans': [dict(r) for r in rows]})
 
-@shops_bp.route('/api/bags', methods=['GET', 'POST'])
+@shops_bp.route("/api/bags", methods=["GET", "POST"])
+@require_auth
 def handle_bags():
     conn = db.get_db()
-    cursor = conn.cursor()
-    p = db.ph()
+    try:
+        cursor = conn.cursor()
+        p = db.ph()
+        if request.method == "POST":
+            data = request.get_json(silent=True) or {}
+            bag_type = str(data.get("bagType") or "").strip()
+            capacity = str(data.get("capacity") or "").strip()
+            if not bag_type or not capacity:
+                return jsonify({"success": False, "message": "Bag type and capacity are required"}), 400
+            cursor.execute(
+                f"INSERT INTO bags_config (user_id, bag_type, capacity) VALUES ({p}, {p}, {p})",
+                (g.user_id, bag_type, capacity),
+            )
+            conn.commit()
+            return jsonify({"success": True, "message": "Bags configuration saved"}), 201
 
-    if request.method == 'POST':
-        data = request.get_json() or {}
-        bag_type = data.get('bagType', 'Standard')
-        capacity = data.get('capacity', '50kg')
-        cursor.execute(f"INSERT INTO bags_config (bag_type, capacity) VALUES ({p}, {p})", (bag_type, capacity))
-        conn.commit()
+        cursor.execute(f"SELECT * FROM bags_config WHERE user_id = {p} ORDER BY id DESC", (g.user_id,))
+        return jsonify({"success": True, "bags": [dict(row) for row in cursor.fetchall()]})
+    finally:
         conn.close()
-        return jsonify({'success': True, 'message': 'Bags config saved'})
-
-    cursor.execute("SELECT * FROM bags_config ORDER BY id DESC")
-    rows = cursor.fetchall()
-    conn.close()
-    return jsonify({'success': True, 'bags': [dict(r) for r in rows]})

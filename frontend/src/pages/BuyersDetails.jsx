@@ -11,6 +11,7 @@ export default function BuyersDetails({ user, onLogout }) {
   const [channels, setChannels] = useState([{ kisanName: '', bags: '', price: '' }]);
   const [hamali, setHamali] = useState(user?.default_hamali || 0);
   const [advance, setAdvance] = useState('');
+  const [paymentMode, setPaymentMode] = useState('CASH');
   const [advanceDate, setAdvanceDate] = useState(new Date().toISOString().split('T')[0]);
   const [advanceTime, setAdvanceTime] = useState(() => {
     const now = new Date();
@@ -27,57 +28,24 @@ export default function BuyersDetails({ user, onLogout }) {
   const [confirmDeleteId, setConfirmDeleteId] = useState(null);
   const [editingBillId, setEditingBillId] = useState(null);
 
-  const getLocalBills = () => {
-    try {
-      const saved = localStorage.getItem('agri_local_buyer_bills');
-      return saved ? JSON.parse(saved) : [];
-    } catch (e) {
-      return [];
-    }
-  };
-
-  const saveOrUpdateLocalBill = (billObj) => {
-    try {
-      const current = getLocalBills();
-      const exists = current.some(b => b.id === billObj.id);
-      let updated;
-      if (exists) {
-        updated = current.map(b => b.id === billObj.id ? { ...b, ...billObj } : b);
-      } else {
-        updated = [billObj, ...current];
-      }
-      localStorage.setItem('agri_local_buyer_bills', JSON.stringify(updated));
-    } catch (e) {}
-  };
-
-  const removeLocalBill = (billId) => {
-    try {
-      const current = getLocalBills();
-      const updated = current.filter(b => b.id !== billId);
-      localStorage.setItem('agri_local_buyer_bills', JSON.stringify(updated));
-    } catch (e) {}
-  };
-
   const handleDeleteBill = async (billId) => {
-    removeLocalBill(billId);
     setBills(prev => prev.filter(b => b.id !== billId));
     try {
       await axios.delete(`${API_BASE_URL}/api/delete-bill/${billId}`);
+      fetchBills(billdate);
     } catch (err) {}
   };
 
   const fetchBills = async (selectedDate) => {
-    const local = getLocalBills().filter(b => !selectedDate || b.date === selectedDate);
     try {
       const res = await axios.get(`${API_BASE_URL}/api/buyer-bills?date=${selectedDate}`);
       if (res.data && res.data.success) {
         const apiBills = res.data.bills || [];
-        const combined = [...local, ...apiBills.filter(ab => !local.some(lb => lb.id === ab.id))];
-        setBills(combined);
-        return;
+        setBills(apiBills);
       }
-    } catch (err) {}
-    setBills(local);
+    } catch (err) {
+      setBills([]);
+    }
   };
 
   useEffect(() => {
@@ -160,28 +128,18 @@ export default function BuyersDetails({ user, onLogout }) {
     };
 
     try {
-      const res = await axios.post(`${API_BASE_URL}/api/add-buyer-bill`, {
+      await axios.post(`${API_BASE_URL}/api/add-buyer-bill`, {
         name,
         billdate,
         advanceTime,
         items: channels,
         hamali,
         advance,
+        paymentMode,
         bagsSold,
         priceSold
       });
-      if (res.data && res.data.success) {
-        if (res.data.bill) {
-          saveOrUpdateLocalBill({ ...res.data.bill, ...billObj });
-        } else {
-          saveOrUpdateLocalBill(billObj);
-        }
-      } else {
-        saveOrUpdateLocalBill(billObj);
-      }
-    } catch (err) {
-      saveOrUpdateLocalBill(billObj);
-    }
+    } catch (err) {}
 
     alert(editingBillId ? 'Updated successfully' : 'Saved successfully');
     setEditingBillId(null);
@@ -298,6 +256,14 @@ export default function BuyersDetails({ user, onLogout }) {
                     placeholder="Amount"
                     style={{ border: '1px solid #cbd5e1', padding: '6px', borderRadius: '4px', width: '80px' }}
                   />
+                  <select
+                    value={paymentMode}
+                    onChange={(e) => setPaymentMode(e.target.value)}
+                    style={{ border: '1px solid #cbd5e1', padding: '6px', borderRadius: '4px', fontWeight: 'bold', backgroundColor: '#f8fafc', color: '#0f172a', cursor: 'pointer' }}
+                  >
+                    <option value="CASH">💵 Cash</option>
+                    <option value="UPI">📱 UPI Payment</option>
+                  </select>
                   <input
                     type="date"
                     value={advanceDate}
@@ -485,7 +451,7 @@ export default function BuyersDetails({ user, onLogout }) {
         </div>
       </div>
 
-      <BillModal bill={selectedBill} onClose={() => setSelectedBill(null)} />
+      <BillModal bill={selectedBill} isBuyerPage={true} onClose={() => setSelectedBill(null)} />
 
       {confirmDeleteId !== null && (
         <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0, 0, 0, 0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>

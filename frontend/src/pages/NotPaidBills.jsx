@@ -13,30 +13,21 @@ export default function NotPaidBills({ user, onLogout }) {
     years.push(y);
   }
 
-  const getLocalBills = () => {
-    try {
-      const saved = localStorage.getItem('agri_local_bills');
-      return saved ? JSON.parse(saved) : [];
-    } catch (e) {
-      return [];
-    }
-  };
-
   const handleGetBills = async (e) => {
     e.preventDefault();
-    const local = getLocalBills().filter(b => b.paid !== 'YES');
     try {
       const res = await axios.get(`${API_BASE_URL}/api/home-bills`);
       if (res.data && res.data.success) {
         const apiBills = (res.data.bills || []).filter(b => b.paid !== 'YES');
-        setBills([...local, ...apiBills]);
+        setBills(apiBills);
         setSearched(true);
         return;
       }
-    } catch (err) {}
-    setBills(local);
+    } catch (e) {}
+    setBills([]);
     setSearched(true);
   };
+
 
   const netTotalSum = bills.reduce((acc, b) => acc + (b.no_of_bags * b.price), 0);
 

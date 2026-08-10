@@ -9,16 +9,6 @@ export default function SMS({ user, onLogout }) {
   const [searched, setSearched] = useState(false);
   const [copiedId, setCopiedId] = useState(null);
 
-  const getLocalBills = () => {
-    try {
-      const saved = localStorage.getItem('agri_local_bills');
-      const parsed = saved ? JSON.parse(saved) : [];
-      return parsed.filter(b => b.type !== 'BUYER');
-    } catch (e) {
-      return [];
-    }
-  };
-
   const generateSmsFromBills = (billsList) => {
     const companyInitials = user?.company_initials || 'I.L.C.';
 
@@ -53,14 +43,11 @@ export default function SMS({ user, onLogout }) {
   };
 
   const fetchSMSToBeSent = async () => {
-    const local = getLocalBills().filter(b => b.date === sdate || b.billdate === sdate);
-    let allBills = [...local];
-
+    let allBills = [];
     try {
       const res = await axios.get(`${API_BASE_URL}/api/home-bills?date=${sdate}`);
       if (res.data && res.data.success) {
-        const apiBills = (res.data.bills || []).filter(b => b.type !== 'BUYER');
-        allBills = [...local, ...apiBills.filter(ab => !local.some(lb => lb.id === ab.id))];
+        allBills = (res.data.bills || []).filter(b => b.type !== 'BUYER');
       }
     } catch (err) {}
 

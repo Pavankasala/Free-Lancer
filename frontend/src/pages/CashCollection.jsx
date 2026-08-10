@@ -17,43 +17,19 @@ export default function CashCollection({ user, onLogout }) {
   const [singleSearched, setSingleSearched] = useState(false);
   const [rangeSearched, setRangeSearched] = useState(false);
 
-  const getLocalCash = () => {
-    try {
-      const saved = localStorage.getItem('agri_local_cash');
-      return saved ? JSON.parse(saved) : [];
-    } catch (e) {
-      return [];
-    }
-  };
-
-  const saveLocalCash = (item) => {
-    try {
-      const current = getLocalCash();
-      localStorage.setItem('agri_local_cash', JSON.stringify([item, ...current]));
-    } catch (e) {}
-  };
-
   const handleAddSubmit = async (e) => {
     e.preventDefault();
     if (Number(amount) < 0) {
       alert("Invalid input! Cash collection amount cannot be negative.");
       return;
     }
-    const newItem = { id: Date.now(), date: cbilldate, amount: Number(amount) || 0, given_by: cname };
     try {
-      const res = await axios.post(`${API_BASE_URL}/api/cash-collection`, {
+      await axios.post(`${API_BASE_URL}/api/cash-collection`, {
         date: cbilldate,
         amount: amount,
         given_by: cname
       });
-      if (res.data && res.data.success) {
-        saveLocalCash(res.data.cash || newItem);
-      } else {
-        saveLocalCash(newItem);
-      }
-    } catch (err) {
-      saveLocalCash(newItem);
-    }
+    } catch (err) {}
     alert('saved successfully');
     setAmount('');
     setCname('');
@@ -61,32 +37,26 @@ export default function CashCollection({ user, onLogout }) {
   };
 
   const fetchSingleDate = async () => {
-    const local = getLocalCash().filter(c => c.date === singleDate);
     try {
       const res = await axios.get(`${API_BASE_URL}/api/cash-collection?date=${singleDate}`);
       if (res.data && res.data.success) {
-        const apiCash = res.data.cash_collections || [];
-        setSingleList([...local, ...apiCash]);
-        setSingleSearched(true);
-        return;
+        setSingleList(res.data.cash_collections || []);
       }
-    } catch (err) {}
-    setSingleList(local);
+    } catch (err) {
+      setSingleList([]);
+    }
     setSingleSearched(true);
   };
 
   const fetchRangeDate = async () => {
-    const local = getLocalCash().filter(c => c.date >= fromDate && c.date <= toDate);
     try {
       const res = await axios.get(`${API_BASE_URL}/api/cash-collection?fromDate=${fromDate}&toDate=${toDate}`);
       if (res.data && res.data.success) {
-        const apiCash = res.data.cash_collections || [];
-        setRangeList([...local, ...apiCash]);
-        setRangeSearched(true);
-        return;
+        setRangeList(res.data.cash_collections || []);
       }
-    } catch (err) {}
-    setRangeList(local);
+    } catch (err) {
+      setRangeList([]);
+    }
     setRangeSearched(true);
   };
 

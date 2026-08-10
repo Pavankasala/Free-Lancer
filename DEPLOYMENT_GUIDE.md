@@ -48,5 +48,6 @@ This guide outlines the exact 3-step deployment procedure for your **S.L.C Lemon
 ## 🎉 Verification Checklist
 
 - [x] **Frontend SPA Routing**: Handled automatically via `frontend/vercel.json`.
-- [x] **Database Auto-Initialization**: `db.init_db()` automatically runs on Render startup, creating all tables and default Admin user (`username: admin`, `password: admin`) in Neon PostgreSQL.
+- [x] **Database Auto-Initialization**: `db.init_db()` automatically runs on Render startup, creating PostgreSQL tables and indexes securely without default admin backdoors.
 - [x] **Production WSGI Server**: Uses `Gunicorn` on Render and `Waitress` on Windows.
+

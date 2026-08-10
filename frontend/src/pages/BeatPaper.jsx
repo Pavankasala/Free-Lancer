@@ -8,32 +8,21 @@ export default function BeatPaper({ user, onLogout }) {
   const [bills, setBills] = useState([]);
   const [searched, setSearched] = useState(false);
 
-  const getLocalBills = () => {
-    try {
-      const saved = localStorage.getItem('agri_local_bills');
-      const parsed = saved ? JSON.parse(saved) : [];
-      return parsed.filter(b => b.type !== 'BUYER');
-    } catch (e) {
-      return [];
-    }
-  };
-
   const fetchBeatPaperBills = async (selectedDate) => {
     const d = selectedDate || date;
-    const local = getLocalBills().filter(b => b.date === d || b.billdate === d);
     try {
       const res = await axios.get(`${API_BASE_URL}/api/home-bills?date=${d}`);
       if (res.data && res.data.success) {
         const apiBills = (res.data.bills || []).filter(b => b.type !== 'BUYER');
-        const combined = [...local, ...apiBills.filter(ab => !local.some(lb => lb.id === ab.id))];
-        setBills(combined);
+        setBills(apiBills);
         setSearched(true);
         return;
       }
-    } catch (err) {}
-    setBills(local);
+    } catch (e) {}
+    setBills([]);
     setSearched(true);
   };
+
 
   useEffect(() => {
     fetchBeatPaperBills(date);

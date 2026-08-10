@@ -39,7 +39,8 @@ export default function Login({ onLoginSuccess }) {
               email: googleUser.email,
               name: googleUser.name || googleUser.email.split("@")[0]
             });
-            handleLoginResponse(backendRes.data?.user || googleUser, accessToken);
+            const jwtToken = backendRes.data?.access_token || backendRes.data?.token || accessToken;
+            handleLoginResponse(backendRes.data?.user || googleUser, jwtToken);
           } catch (e) {
             handleLoginResponse(googleUser, accessToken);
           }
@@ -52,11 +53,36 @@ export default function Login({ onLoginSuccess }) {
 
   const handleRealGoogleOAuth = () => {
     const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID || "765546655855-8601r8pfg2qnaa3pl385mh8tcngs6f17.apps.googleusercontent.com";
-    const redirectUri = window.location.origin;
-    const scope = "email profile";
-    const responseType = "token";
 
-    const googleAuthUrl = `https://accounts.google.com/o/oauth2/v2/auth?client_id=${clientId}&redirect_uri=${encodeURIComponent(redirectUri)}&response_type=${responseType}&scope=${encodeURIComponent(scope)}`;
+    if (window.google && window.google.accounts && window.google.accounts.oauth2) {
+      const client = window.google.accounts.oauth2.initTokenClient({
+        client_id: clientId,
+        scope: "email profile",
+        callback: async (response) => {
+          if (response && response.access_token) {
+            try {
+              const res = await axios.get("https://www.googleapis.com/oauth2/v3/userinfo", {
+                headers: { Authorization: `Bearer ${response.access_token}` }
+              });
+              const googleUser = res.data;
+              const backendRes = await axios.post(API_ENDPOINTS.GOOGLE_AUTH, {
+                email: googleUser.email,
+                name: googleUser.name || googleUser.email.split("@")[0]
+              });
+              const jwtToken = backendRes.data?.access_token || backendRes.data?.token || response.access_token;
+              handleLoginResponse(backendRes.data?.user || googleUser, jwtToken);
+            } catch (e) {
+              handleLoginResponse({ name: "Google User", email: "user@gmail.com" }, response.access_token);
+            }
+          }
+        },
+      });
+      client.requestAccessToken();
+      return;
+    }
+
+    const redirectUri = window.location.origin;
+    const googleAuthUrl = `https://accounts.google.com/o/oauth2/v2/auth?client_id=${clientId}&redirect_uri=${encodeURIComponent(redirectUri)}&response_type=token&scope=${encodeURIComponent("email profile")}`;
 
     const width = 500;
     const height = 600;
@@ -71,45 +97,10 @@ export default function Login({ onLoginSuccess }) {
 
     if (!authWindow) {
       window.location.href = googleAuthUrl;
-      return;
     }
-
-    const timer = setInterval(() => {
-      try {
-        if (authWindow.closed) {
-          clearInterval(timer);
-          return;
-        }
-        if (authWindow.location && authWindow.location.href.includes("access_token")) {
-          const hashParams = new URLSearchParams(authWindow.location.hash.substring(1));
-          const accessToken = hashParams.get("access_token");
-          authWindow.close();
-          clearInterval(timer);
-
-          if (accessToken) {
-            axios.get("https://www.googleapis.com/oauth2/v3/userinfo", {
-              headers: { Authorization: `Bearer ${accessToken}` }
-            }).then(async (res) => {
-              const googleUser = res.data;
-              try {
-                const backendRes = await axios.post(API_ENDPOINTS.GOOGLE_AUTH, {
-                  email: googleUser.email,
-                  name: googleUser.name || googleUser.email.split("@")[0]
-                });
-                handleLoginResponse(backendRes.data?.user || googleUser, accessToken);
-              } catch (e) {
-                handleLoginResponse(googleUser, accessToken);
-              }
-            }).catch(() => {
-              handleLoginResponse({ name: "Google User", email: "user@gmail.com" }, accessToken);
-            });
-          }
-        }
-      } catch (err) {
-        // Cross-origin location checks before redirecting back
-      }
-    }, 500);
   };
+
+
 
   async function handleSubmit(e) {
     e.preventDefault();
@@ -137,53 +128,8 @@ export default function Login({ onLoginSuccess }) {
         setError(response.data.message || "Incorrect email or password");
       }
     } catch (err) {
-      // Backend unreachable — use offline/local authentication
-      if (err.response?.data?.message) {
-        // Backend responded with an error (wrong credentials)
-        setError(err.response.data.message);
-      } else {
-        // Backend completely unreachable — allow offline login
-        // Check admin default
-        if (email === "admin" && password === "admin") {
-          handleLoginResponse({ name: "Operator", user_name: "admin", user_type: "OPE" }, "admin-token");
-          return;
-        }
-
-        // Check locally stored accounts
-        try {
-          const savedAccounts = localStorage.getItem('agri_local_accounts');
-          const accounts = savedAccounts ? JSON.parse(savedAccounts) : [];
-          const found = accounts.find(a =>
-            (a.email === email || a.user_name === email) && a.password === password
-          );
-          if (found) {
-            const userObj = { ...found };
-            delete userObj.password;
-            handleLoginResponse(userObj, `local-token-${found.user_name}`);
-            return;
-          }
-        } catch (e) {}
-
-        // Auto-create local account for first-time offline users
-        const userName = email.includes('@') ? email.split('@')[0] : email;
-        const newUser = {
-          user_name: userName,
-          name: userName,
-          email: email,
-          password: password,
-          user_type: 'OPE'
-        };
-        try {
-          const savedAccounts = localStorage.getItem('agri_local_accounts');
-          const accounts = savedAccounts ? JSON.parse(savedAccounts) : [];
-          accounts.push(newUser);
-          localStorage.setItem('agri_local_accounts', JSON.stringify(accounts));
-        } catch (e) {}
-
-        const userObj = { ...newUser };
-        delete userObj.password;
-        handleLoginResponse(userObj, `local-token-${userName}`);
-      }
+      const msg = err.response?.data?.message || "Unable to connect to backend server. Please verify your internet or backend connection.";
+      setError(msg);
     } finally {
       setLoading(false);
     }

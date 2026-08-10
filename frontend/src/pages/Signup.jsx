@@ -40,7 +40,8 @@ export default function Signup({ onLoginSuccess }) {
               email: googleUser.email,
               name: googleUser.name || googleUser.email.split("@")[0]
             });
-            handleSignupSuccess(backendRes.data?.user || googleUser, accessToken);
+            const jwtToken = backendRes.data?.access_token || backendRes.data?.token || accessToken;
+            handleSignupSuccess(backendRes.data?.user || googleUser, jwtToken);
           } catch (e) {
             handleSignupSuccess(googleUser, accessToken);
           }
@@ -53,11 +54,36 @@ export default function Signup({ onLoginSuccess }) {
 
   const handleRealGoogleOAuth = () => {
     const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID || "765546655855-8601r8pfg2qnaa3pl385mh8tcngs6f17.apps.googleusercontent.com";
-    const redirectUri = window.location.origin;
-    const scope = "email profile";
-    const responseType = "token";
 
-    const googleAuthUrl = `https://accounts.google.com/o/oauth2/v2/auth?client_id=${clientId}&redirect_uri=${encodeURIComponent(redirectUri)}&response_type=${responseType}&scope=${encodeURIComponent(scope)}`;
+    if (window.google && window.google.accounts && window.google.accounts.oauth2) {
+      const client = window.google.accounts.oauth2.initTokenClient({
+        client_id: clientId,
+        scope: "email profile",
+        callback: async (response) => {
+          if (response && response.access_token) {
+            try {
+              const res = await axios.get("https://www.googleapis.com/oauth2/v3/userinfo", {
+                headers: { Authorization: `Bearer ${response.access_token}` }
+              });
+              const googleUser = res.data;
+              const backendRes = await axios.post(API_ENDPOINTS.GOOGLE_AUTH, {
+                email: googleUser.email,
+                name: googleUser.name || googleUser.email.split("@")[0]
+              });
+              const jwtToken = backendRes.data?.access_token || backendRes.data?.token || response.access_token;
+              handleSignupSuccess(backendRes.data?.user || googleUser, jwtToken);
+            } catch (e) {
+              handleSignupSuccess({ name: "Google User", email: "user@gmail.com" }, response.access_token);
+            }
+          }
+        },
+      });
+      client.requestAccessToken();
+      return;
+    }
+
+    const redirectUri = window.location.origin;
+    const googleAuthUrl = `https://accounts.google.com/o/oauth2/v2/auth?client_id=${clientId}&redirect_uri=${encodeURIComponent(redirectUri)}&response_type=token&scope=${encodeURIComponent("email profile")}`;
 
     const width = 500;
     const height = 600;
@@ -72,45 +98,10 @@ export default function Signup({ onLoginSuccess }) {
 
     if (!authWindow) {
       window.location.href = googleAuthUrl;
-      return;
     }
-
-    const timer = setInterval(() => {
-      try {
-        if (authWindow.closed) {
-          clearInterval(timer);
-          return;
-        }
-        if (authWindow.location && authWindow.location.href.includes("access_token")) {
-          const hashParams = new URLSearchParams(authWindow.location.hash.substring(1));
-          const accessToken = hashParams.get("access_token");
-          authWindow.close();
-          clearInterval(timer);
-
-          if (accessToken) {
-            axios.get("https://www.googleapis.com/oauth2/v3/userinfo", {
-              headers: { Authorization: `Bearer ${accessToken}` }
-            }).then(async (res) => {
-              const googleUser = res.data;
-              try {
-                const backendRes = await axios.post(API_ENDPOINTS.GOOGLE_AUTH, {
-                  email: googleUser.email,
-                  name: googleUser.name || googleUser.email.split("@")[0]
-                });
-                handleSignupSuccess(backendRes.data?.user || googleUser, accessToken);
-              } catch (e) {
-                handleSignupSuccess(googleUser, accessToken);
-              }
-            }).catch(() => {
-              handleSignupSuccess({ name: "Google User", email: "user@gmail.com" }, accessToken);
-            });
-          }
-        }
-      } catch (err) {
-        // Cross-origin checks before redirect
-      }
-    }, 500);
   };
+
+
 
   async function handleSubmit(e) {
     e.preventDefault();
