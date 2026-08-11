@@ -81,11 +81,16 @@ export default function Home({ user, onLogout, onUpdateUser }) {
 
 
   const handleEditClick = (b) => {
+    if (!b) return;
     setEditingBillId(b.id);
     setName(b.name || '');
     setBilldate(b.date || b.billdate || billdate);
     if (b.channels && b.channels.length > 0) {
-      setChannels(b.channels);
+      setChannels(b.channels.map(c => ({
+        bags: c.bags ?? '',
+        price: c.price ?? '',
+        kisanName: c.kisanName || c.kisan_name || ''
+      })));
     } else {
       setChannels([{ bags: b.no_of_bags || '', price: b.price || '' }]);
     }
@@ -93,7 +98,19 @@ export default function Home({ user, onLogout, onUpdateUser }) {
     setAdvance(b.advance || '');
     setBagsSold(b.bagsSold || '');
     setPriceSold(b.priceSold || '');
-    window.scrollTo({ top: 0, behavior: 'smooth' });
+    try {
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    } catch (e) {}
+  };
+
+  const handleCancelEdit = () => {
+    setEditingBillId(null);
+    setName('');
+    setChannels([{ bags: '', price: '' }]);
+    setHamali(user?.default_hamali || 5);
+    setAdvance('');
+    setBagsSold('');
+    setPriceSold('');
   };
 
   const addChannel = (e) => {
