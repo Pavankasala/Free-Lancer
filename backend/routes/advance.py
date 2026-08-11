@@ -114,7 +114,9 @@ def handle_advance():
             old_bal = float(r.get("display_total") or 0.0)
             adv = float(r.get("advance") or 0.0)
             r["old_balance"] = old_bal
-            r["remaining_to_pay"] = max(old_bal - adv, 0.0) if r.get("paid") != "YES" else 0.0
+            is_paid = (str(r.get("paid") or "").upper() == "YES") or (old_bal > 0 and adv >= old_bal)
+            r["paid"] = "YES" if is_paid else "NO"
+            r["remaining_to_pay"] = 0.0 if is_paid else max(old_bal - adv, 0.0)
             src = r.get("source_kisan_name")
             nm = r.get("name")
             if not nm and src:
@@ -201,12 +203,37 @@ def update_advance(adv_id):
     try:
         cursor = conn.cursor()
         p = db.ph()
+
+        paid_val = str(data.get("paid") or "").upper()
+        if paid_val not in ("YES", "NO"):
+            cursor.execute(
+                f"SELECT bill_group_id, (no_of_bags * price) as item_total FROM inventory WHERE id = {p} AND user_id = {p}",
+                (adv_id, g.user_id),
+            )
+            item_row = cursor.fetchone()
+            if item_row:
+                item_dict = dict(item_row)
+                grp_id = item_dict.get("bill_group_id")
+                if grp_id:
+                    cursor.execute(
+                        f"SELECT SUM(no_of_bags * price) as grp_total FROM inventory WHERE bill_group_id = {p} AND user_id = {p}",
+                        (grp_id, g.user_id),
+                    )
+                    grp_row = cursor.fetchone()
+                    total_bill = float((dict(grp_row) if grp_row else {}).get("grp_total") or 0.0)
+                else:
+                    total_bill = float(item_dict.get("item_total") or 0.0)
+
+                paid_val = "YES" if (total_bill > 0 and amount >= total_bill) else "NO"
+            else:
+                paid_val = "NO"
+
         cursor.execute(
             f"""
-            UPDATE inventory SET name = {p}, advance = {p}, date = {p}
+            UPDATE inventory SET name = {p}, advance = {p}, date = {p}, paid = {p}
             WHERE id = {p} AND user_id = {p} AND (type = 'ADVANCE' OR (advance IS NOT NULL AND advance > 0))
             """,
-            (name, amount, advance_date, adv_id, g.user_id),
+            (name, amount, advance_date, paid_val, adv_id, g.user_id),
         )
         if cursor.rowcount != 1:
             return jsonify({"success": False, "message": "Advance not found"}), 404

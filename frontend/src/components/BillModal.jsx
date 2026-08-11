@@ -492,20 +492,20 @@ function BillModal({ bill, isBuyerPage, onClose }) {
               <div style={{ fontSize: "13px", display: "flex", flexDirection: "column", gap: "4px" }}>
                 <div style={{ display: "flex", justifyContent: "space-between" }}>
                   <span>Commission(4%)</span>
-                  <span>{commissionVal}</span>
+                  <span>- {commissionVal}</span>
                 </div>
                 <div style={{ display: "flex", justifyContent: "space-between" }}>
                   <span>Hamali</span>
-                  <span>{hamaliVal}</span>
+                  <span>- {hamaliVal}</span>
                 </div>
                 <div style={{ display: "flex", justifyContent: "space-between" }}>
                   <span>Less For Damages</span>
-                  <span>{damagedGoodsVal}</span>
+                  <span>- {damagedGoodsVal}</span>
                 </div>
                 {advanceVal > 0 && (
                   <div style={{ display: "flex", justifyContent: "space-between" }}>
                     <span>Advance</span>
-                    <span>{advanceVal}</span>
+                    <span>- {advanceVal}</span>
                   </div>
                 )}
                 <div style={{ borderTop: "1px dashed #334155", margin: "6px 0" }}></div>

@@ -134,15 +134,22 @@ export default function Home({ user, onLogout, onUpdateUser }) {
     };
 
     try {
+      const token = localStorage.getItem('token');
+      const headers = token ? { Authorization: `Bearer ${token}` } : {};
+
       if (editingBillId) {
         await axios.put(`${API_BASE_URL}/api/update-bill/${editingBillId}`, {
           name,
+          billdate,
           date: billdate,
-          no_of_bags: totalBags,
-          price: avgPrice,
+          time: advanceTime,
+          advanceTime,
+          items: channels,
+          hamali,
           advance,
-          hamali
-        });
+          bagsSold,
+          priceSold
+        }, { headers });
       } else {
         await axios.post(`${API_BASE_URL}/api/add-bill`, {
           name,
@@ -153,7 +160,7 @@ export default function Home({ user, onLogout, onUpdateUser }) {
           advance,
           bagsSold,
           priceSold
-        });
+        }, { headers });
       }
     } catch (err) {}
 
