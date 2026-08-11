@@ -184,6 +184,13 @@ export default function Advance({ user, onLogout }) {
   }, []);
 
   const totalAdvanceAmount = advanceList.reduce((acc, b) => acc + (Number(b.advance) || 0), 0);
+  const totalOldBalance = advanceList.reduce((acc, b) => acc + (Number(b.old_balance || b.display_total) || 0), 0);
+  const totalRemainingToPay = advanceList.reduce((acc, b) => {
+    const rem = b.remaining_to_pay !== undefined
+      ? Number(b.remaining_to_pay)
+      : Math.max(0, (Number(b.old_balance || b.display_total) || 0) - (Number(b.advance) || 0));
+    return acc + rem;
+  }, 0);
 
   return (
     <div style={{ fontFamily: "'Times New Roman', Times, serif", backgroundColor: '#f8fafc', minHeight: '100vh' }}>
@@ -370,7 +377,9 @@ export default function Advance({ user, onLogout }) {
                     <th style={{ padding: '8px', textAlign: 'left' }}>S.No.</th>
                     <th style={{ padding: '8px', textAlign: 'left' }}>Kisan / Member Name</th>
                     <th style={{ padding: '8px', textAlign: 'center' }}>Total Bags</th>
+                    <th style={{ padding: '8px', textAlign: 'right' }}>Old Balance (₹)</th>
                     <th style={{ padding: '8px', textAlign: 'right' }}>Advance Amount (₹)</th>
+                    <th style={{ padding: '8px', textAlign: 'right' }}>Remaining to Pay (₹)</th>
                     <th style={{ padding: '8px', textAlign: 'center' }}>Date & Time</th>
                     <th style={{ padding: '8px', textAlign: 'center' }}>Payment Status</th>
                     <th style={{ padding: '8px', textAlign: 'center' }}>Action</th>
@@ -382,8 +391,14 @@ export default function Advance({ user, onLogout }) {
                       <td style={{ padding: '8px' }}>{idx + 1}</td>
                       <td style={{ padding: '8px', fontWeight: 'bold', color: '#0f172a' }}>{item.name}</td>
                       <td style={{ padding: '8px', textAlign: 'center' }}>{item.no_of_bags}</td>
+                      <td style={{ padding: '8px', textAlign: 'right', color: '#334155', fontWeight: 'bold' }}>
+                        ₹{Number(item.old_balance || item.display_total || 0).toLocaleString()}
+                      </td>
                       <td style={{ padding: '8px', textAlign: 'right', color: '#dc2626', fontWeight: 'bold' }}>
-                        ₹{Number(item.advance).toLocaleString()}
+                        ₹{Number(item.advance || 0).toLocaleString()}
+                      </td>
+                      <td style={{ padding: '8px', textAlign: 'right', color: (item.remaining_to_pay ?? 0) > 0 ? '#d97706' : '#16a34a', fontWeight: 'bold' }}>
+                        ₹{Number(item.remaining_to_pay ?? Math.max(0, (item.old_balance || 0) - (item.advance || 0))).toLocaleString()}
                       </td>
                       <td style={{ padding: '8px', textAlign: 'center' }}>{item.date || filterDate} {item.time || item.advanceTime || ''}</td>
                       <td style={{ padding: '8px', textAlign: 'center', fontWeight: 'bold', color: item.paid === 'YES' ? '#16a34a' : '#dc2626' }}>
@@ -410,9 +425,15 @@ export default function Advance({ user, onLogout }) {
                     </tr>
                   ))}
                   <tr style={{ backgroundColor: '#f8fafc', fontWeight: 'bold' }}>
-                    <td colSpan="3" align="right" style={{ padding: '10px' }}>Total Advance Given:</td>
+                    <td colSpan="3" align="right" style={{ padding: '10px' }}>Totals:</td>
+                    <td align="right" style={{ padding: '10px', color: '#334155' }}>
+                      ₹{totalOldBalance.toLocaleString()}
+                    </td>
                     <td align="right" style={{ padding: '10px', color: '#dc2626', fontSize: '1.1rem' }}>
                       ₹{totalAdvanceAmount.toLocaleString()}
+                    </td>
+                    <td align="right" style={{ padding: '10px', color: '#d97706', fontSize: '1.1rem' }}>
+                      ₹{totalRemainingToPay.toLocaleString()}
                     </td>
                     <td colSpan="3"></td>
                   </tr>

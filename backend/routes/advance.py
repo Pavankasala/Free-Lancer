@@ -76,9 +76,11 @@ def handle_advance():
         cursor = conn.cursor()
         p = db.ph()
 
-        # Subquery to get total bags per bill_group_id
+        # Subquery to get total bags and total value per bill_group_id
         group_bags_sub = f"""
-            SELECT bill_group_id, SUM(no_of_bags) AS total_bags
+            SELECT bill_group_id,
+                   SUM(no_of_bags) AS total_bags,
+                   SUM(no_of_bags * price) AS total_val
             FROM inventory
             WHERE user_id = {p} AND bill_group_id IS NOT NULL
             GROUP BY bill_group_id
@@ -86,7 +88,8 @@ def handle_advance():
 
         query = f"""
             SELECT i.*,
-                COALESCE(grp.total_bags, i.no_of_bags) AS display_bags
+                COALESCE(grp.total_bags, i.no_of_bags) AS display_bags,
+                COALESCE(grp.total_val, i.no_of_bags * i.price) AS display_total
             FROM inventory i
             LEFT JOIN ({group_bags_sub}) grp ON i.bill_group_id = grp.bill_group_id
             WHERE i.user_id = {p}
@@ -107,8 +110,11 @@ def handle_advance():
         cursor.execute(query, tuple(params))
         rows = [dict(row) for row in cursor.fetchall()]
         for r in rows:
-            # Use the computed total bags for display
             r["no_of_bags"] = r.get("display_bags") or r.get("no_of_bags") or 0
+            old_bal = float(r.get("display_total") or 0.0)
+            adv = float(r.get("advance") or 0.0)
+            r["old_balance"] = old_bal
+            r["remaining_to_pay"] = max(old_bal - adv, 0.0) if r.get("paid") != "YES" else 0.0
             src = r.get("source_kisan_name")
             nm = r.get("name")
             if not nm and src:

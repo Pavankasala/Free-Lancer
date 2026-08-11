@@ -85,10 +85,10 @@ export default function Home({ user, onLogout, onUpdateUser }) {
 
   const addChannel = (e) => {
     e.preventDefault();
-    if (channels.length < 10) {
+    if (channels.length < 200) {
       setChannels([...channels, { bags: '', price: '' }]);
     } else {
-      alert("Maximum channels 10 only");
+      alert("Maximum channels 200 only");
     }
   };
 
