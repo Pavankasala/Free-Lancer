@@ -81,10 +81,39 @@ def get_kisan_balance():
         query += " ORDER BY id DESC"
         cursor.execute(query, tuple(params))
         records = _group_rows(cursor.fetchall())
+
+        total_gross = 0.0
+        total_net = 0.0
+        total_advance = 0.0
+        total_pending = 0.0
+
         for record in records:
-            total = float(record.get("total_amount") or 0)
-            record["pending_balance"] = 0.0 if record.get("paid") == "YES" else max(total - float(record.get("advance") or 0), 0.0)
-        return jsonify({"success": True, "records": records})
+            gross = float(record.get("total_amount") or 0.0)
+            net = float(record.get("net_amount") if record.get("net_amount") is not None else gross)
+            adv = float(record.get("advance") or 0.0)
+            is_paid = (record.get("paid") == "YES") or (net > 0 and adv >= net)
+            record["paid"] = "YES" if is_paid else "NO"
+            record["cash_paid"] = net if is_paid else adv
+            pending = 0.0 if is_paid else max(net - adv, 0.0)
+            record["pending_balance"] = pending
+
+            total_gross += gross
+            total_net += net
+            total_advance += adv
+            total_pending += pending
+
+        return jsonify(
+            {
+                "success": True,
+                "records": records,
+                "summary": {
+                    "total_amount": total_gross,
+                    "net_amount": total_net,
+                    "cash_paid": total_advance,
+                    "pending_balance": total_pending,
+                },
+            }
+        )
     finally:
         conn.close()
 
@@ -112,13 +141,22 @@ def get_buyer_balance():
 
         total_amount = 0.0
         cash_paid = 0.0
+        pending_balance = 0.0
+
         for record in records:
-            total = float(record.get("total_amount") or 0)
-            paid = total if record.get("paid") == "YES" else min(float(record.get("advance") or 0), total)
-            record["cash_paid"] = paid
-            record["pending_balance"] = total - paid
-            total_amount += total
-            cash_paid += paid
+            gross = float(record.get("total_amount") or 0.0)
+            net = float(record.get("net_amount") if record.get("net_amount") is not None else gross)
+            adv = float(record.get("advance") or 0.0)
+            is_paid = (record.get("paid") == "YES") or (net > 0 and adv >= net)
+            record["paid"] = "YES" if is_paid else "NO"
+            paid_amount = net if is_paid else adv
+            pending = 0.0 if is_paid else max(net - adv, 0.0)
+            record["cash_paid"] = paid_amount
+            record["pending_balance"] = pending
+
+            total_amount += gross
+            cash_paid += paid_amount
+            pending_balance += pending
 
         return jsonify(
             {
@@ -127,7 +165,7 @@ def get_buyer_balance():
                 "summary": {
                     "total_amount": total_amount,
                     "cash_paid": cash_paid,
-                    "pending_balance": total_amount - cash_paid,
+                    "pending_balance": pending_balance,
                 },
             }
         )
