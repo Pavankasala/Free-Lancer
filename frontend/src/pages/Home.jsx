@@ -114,74 +114,77 @@ export default function Home({ user, onLogout, onUpdateUser }) {
   const handleSubmit = async (e) => {
     e.preventDefault();
 
-    for (const c of channels) {
-      if (Number(c.bags) < 0 || Number(c.price) < 0) {
-        alert("Invalid input! Bags and Price cannot be negative numbers.");
-        return;
-      }
-    }
     if (Number(advance) < 0 || Number(hamali) < 0 || Number(bagsSold) < 0 || Number(priceSold) < 0) {
       alert("Invalid input! Negative values are not allowed.");
       return;
     }
 
-    const totalBags = channels.reduce((acc, c) => acc + (Number(c.bags) || 0), 0);
-    const avgPrice = channels.length > 0 && Number(channels[0].price) ? Number(channels[0].price) : (Number(priceSold) || 0);
+    const validChannels = channels
+      .map(c => ({
+        bags: Number(c.bags) || 0,
+        price: Number(c.price) || 0,
+        kisanName: c.kisanName || c.kisan_name || ''
+      }))
+      .filter(c => c.bags > 0 && c.price >= 0);
 
-    const billObj = {
-      id: editingBillId || Date.now(),
-      name: name || 'Kisan',
-      billdate: billdate,
-      date: billdate,
-      time: advanceTime,
-      advanceTime: advanceTime,
-      channels: channels,
-      no_of_bags: totalBags,
-      price: avgPrice,
-      hamali: Number(hamali) || 0,
-      advance: Number(advance) || 0,
-      bagsSold: bagsSold,
-      priceSold: priceSold,
-      type: 'BUY',
-      paid: 'NO'
-    };
+    if (validChannels.length === 0) {
+      alert("Please enter valid Bags and Price for at least one channel!");
+      return;
+    }
 
     try {
       const token = localStorage.getItem('token');
       const headers = token ? { Authorization: `Bearer ${token}` } : {};
 
       if (editingBillId) {
-        await axios.put(`${API_BASE_URL}/api/update-bill/${editingBillId}`, {
-          name,
+        const res = await axios.put(`${API_BASE_URL}/api/update-bill/${editingBillId}`, {
+          name: name || 'Kisan',
           billdate,
           date: billdate,
           time: advanceTime,
           advanceTime,
-          items: channels,
-          hamali,
-          advance,
+          items: validChannels,
+          hamali: Number(hamali) || 0,
+          advance: Number(advance) || 0,
           bagsSold,
           priceSold
         }, { headers });
+
+        if (res.data && res.data.success) {
+          alert('Updated successfully');
+        } else {
+          alert(res.data?.message || 'Update failed');
+          return;
+        }
       } else {
-        await axios.post(`${API_BASE_URL}/api/add-bill`, {
-          name,
+        const res = await axios.post(`${API_BASE_URL}/api/add-bill`, {
+          name: name || 'Kisan',
           billdate,
           advanceTime,
-          items: channels,
-          hamali,
-          advance,
+          items: validChannels,
+          hamali: Number(hamali) || 0,
+          advance: Number(advance) || 0,
           bagsSold,
           priceSold
         }, { headers });
-      }
-    } catch (err) {}
 
-    alert(editingBillId ? 'Updated successfully' : 'saved successfully');
+        if (res.data && res.data.success) {
+          alert('Saved successfully');
+        } else {
+          alert(res.data?.message || 'Save failed');
+          return;
+        }
+      }
+    } catch (err) {
+      console.error('Error saving bill:', err);
+      alert(err.response?.data?.message || 'Failed to save bill. Please try again.');
+      return;
+    }
+
     setEditingBillId(null);
     setName('');
     setChannels([{ bags: '', price: '' }]);
-    setHamali(5);
+    setHamali(user?.default_hamali || 5);
     setAdvance('');
     setBagsSold('');
     setPriceSold('');

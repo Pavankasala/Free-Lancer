@@ -31,18 +31,22 @@ def _items_from_payload(data):
     items = []
     for item in raw_items:
         if not isinstance(item, dict):
-            raise ValueError("Each bill item must be an object")
-        bags = _number(item.get("bags", item.get("no_of_bags")), "Bags")
-        price = _number(item.get("price"), "Price")
-        if bags <= 0:
-            raise ValueError("Bags must be greater than zero")
-        items.append(
-            {
-                "bags": int(bags),
-                "price": price,
-                "kisan_name": str(item.get("kisanName") or item.get("sourceKisanName") or "").strip(),
-            }
-        )
+            continue
+        try:
+            bags = int(_number(item.get("bags", item.get("no_of_bags")), "Bags"))
+            price = _number(item.get("price"), "Price")
+        except ValueError:
+            continue
+        if bags > 0 and price >= 0:
+            items.append(
+                {
+                    "bags": bags,
+                    "price": price,
+                    "kisan_name": str(item.get("kisanName") or item.get("sourceKisanName") or "").strip(),
+                }
+            )
+    if not items:
+        raise ValueError("At least one bill item with valid Bags and Price is required")
     return items
 
 
@@ -137,7 +141,14 @@ def _find_owned_bill(cursor, bill_id, bill_type):
         f"SELECT * FROM inventory WHERE id = {p} AND user_id = {p} AND type = {p}",
         (bill_id, g.user_id, bill_type),
     )
-    return cursor.fetchone()
+    row = cursor.fetchone()
+    if not row:
+        cursor.execute(
+            f"SELECT * FROM inventory WHERE bill_group_id = {p} AND user_id = {p} AND type = {p} ORDER BY id LIMIT 1",
+            (str(bill_id), g.user_id, bill_type),
+        )
+        row = cursor.fetchone()
+    return row
 
 
 def _delete_bill_group(cursor, row, bill_type):
