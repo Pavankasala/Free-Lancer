@@ -87,6 +87,16 @@ def _group_rows(rows):
     for group_key in ordered_group_keys:
         bill = groups[group_key]
         bill["price"] = bill["total_amount"] / bill["no_of_bags"] if bill["no_of_bags"] else 0.0
+        gross = bill["total_amount"]
+        hamali_val = float(bill.get("hamali") or 0.0)
+        bill_type = bill.get("type", "")
+        if bill_type == "BUY":
+            commission_val = round(gross * 0.04)
+            damage_val = round(gross * 0.06)
+            bill["net_amount"] = max(0.0, gross - commission_val - hamali_val - damage_val)
+        else:
+            # BUYER: no deductions, net = gross
+            bill["net_amount"] = gross
         result.append(bill)
     return result
 
@@ -158,6 +168,45 @@ def _get_bills_for_type(bill_type, date=None):
         query += " ORDER BY id DESC"
         cursor.execute(query, tuple(params))
         return _group_rows(cursor.fetchall())
+    finally:
+        conn.close()
+
+
+
+@bills_bp.route("/api/mark-bill-paid/<int:bill_id>", methods=["POST"])
+@require_auth
+def mark_bill_paid(bill_id):
+    """Toggle paid status (YES/NO) for a BUY or BUYER bill."""
+    data = request.get_json(silent=True) or {}
+    paid_val = str(data.get("paid", "YES")).upper()
+    if paid_val not in ("YES", "NO"):
+        paid_val = "YES"
+    conn = db.get_db()
+    try:
+        cursor = conn.cursor()
+        p = db.ph()
+        # Fetch the bill to get its group id
+        cursor.execute(
+            f"SELECT bill_group_id, type FROM inventory WHERE id = {p} AND user_id = {p}",
+            (bill_id, g.user_id),
+        )
+        row = cursor.fetchone()
+        if not row:
+            return jsonify({"success": False, "message": "Bill not found"}), 404
+        row_dict = dict(row)
+        grp_id = row_dict.get("bill_group_id")
+        if grp_id:
+            cursor.execute(
+                f"UPDATE inventory SET paid = {p}, confirmed = {p} WHERE bill_group_id = {p} AND user_id = {p}",
+                (paid_val, paid_val == "YES", grp_id, g.user_id),
+            )
+        else:
+            cursor.execute(
+                f"UPDATE inventory SET paid = {p}, confirmed = {p} WHERE id = {p} AND user_id = {p}",
+                (paid_val, paid_val == "YES", bill_id, g.user_id),
+            )
+        conn.commit()
+        return jsonify({"success": True, "message": f"Bill marked as {paid_val}"})
     finally:
         conn.close()
 

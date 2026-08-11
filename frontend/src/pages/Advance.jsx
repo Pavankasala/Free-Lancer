@@ -185,10 +185,11 @@ export default function Advance({ user, onLogout }) {
 
   const totalAdvanceAmount = advanceList.reduce((acc, b) => acc + (Number(b.advance) || 0), 0);
   const totalOldBalance = advanceList.reduce((acc, b) => acc + (Number(b.old_balance || b.display_total) || 0), 0);
+  const totalNetAmount = advanceList.reduce((acc, b) => acc + (Number(b.net_amount) || Number(b.old_balance) || 0), 0);
   const totalRemainingToPay = advanceList.reduce((acc, b) => {
     const rem = b.remaining_to_pay !== undefined
       ? Number(b.remaining_to_pay)
-      : Math.max(0, (Number(b.old_balance || b.display_total) || 0) - (Number(b.advance) || 0));
+      : Math.max(0, (Number(b.net_amount || b.old_balance) || 0) - (Number(b.advance) || 0));
     return acc + rem;
   }, 0);
 
@@ -378,6 +379,7 @@ export default function Advance({ user, onLogout }) {
                     <th style={{ padding: '8px', textAlign: 'left' }}>Kisan / Member Name</th>
                     <th style={{ padding: '8px', textAlign: 'center' }}>Total Bags</th>
                     <th style={{ padding: '8px', textAlign: 'right' }}>Old Balance (₹)</th>
+                    <th style={{ padding: '8px', textAlign: 'right' }}>Net Amount (₹)</th>
                     <th style={{ padding: '8px', textAlign: 'right' }}>Advance Amount (₹)</th>
                     <th style={{ padding: '8px', textAlign: 'right' }}>Remaining to Pay (₹)</th>
                     <th style={{ padding: '8px', textAlign: 'center' }}>Date & Time</th>
@@ -386,7 +388,12 @@ export default function Advance({ user, onLogout }) {
                   </tr>
                 </thead>
                 <tbody>
-                  {advanceList.map((item, idx) => (
+                  {advanceList.map((item, idx) => {
+                    const netAmt = Number(item.net_amount ?? item.old_balance ?? 0);
+                    const remAmt = item.remaining_to_pay !== undefined
+                      ? Number(item.remaining_to_pay)
+                      : Math.max(0, netAmt - (Number(item.advance) || 0));
+                    return (
                     <tr key={item.id || idx} style={{ borderBottom: '1px solid #e2e8f0', backgroundColor: idx % 2 === 0 ? '#ffffff' : '#f8fafc' }}>
                       <td style={{ padding: '8px' }}>{idx + 1}</td>
                       <td style={{ padding: '8px', fontWeight: 'bold', color: '#0f172a' }}>{item.name}</td>
@@ -394,11 +401,14 @@ export default function Advance({ user, onLogout }) {
                       <td style={{ padding: '8px', textAlign: 'right', color: '#334155', fontWeight: 'bold' }}>
                         ₹{Number(item.old_balance || item.display_total || 0).toLocaleString()}
                       </td>
+                      <td style={{ padding: '8px', textAlign: 'right', color: '#1e40af', fontWeight: 'bold' }}>
+                        ₹{netAmt.toLocaleString()}
+                      </td>
                       <td style={{ padding: '8px', textAlign: 'right', color: '#dc2626', fontWeight: 'bold' }}>
                         ₹{Number(item.advance || 0).toLocaleString()}
                       </td>
-                      <td style={{ padding: '8px', textAlign: 'right', color: (item.remaining_to_pay ?? 0) > 0 ? '#d97706' : '#16a34a', fontWeight: 'bold' }}>
-                        ₹{Number(item.remaining_to_pay ?? Math.max(0, (item.old_balance || 0) - (item.advance || 0))).toLocaleString()}
+                      <td style={{ padding: '8px', textAlign: 'right', color: remAmt > 0 ? '#d97706' : '#16a34a', fontWeight: 'bold' }}>
+                        ₹{remAmt.toLocaleString()}
                       </td>
                       <td style={{ padding: '8px', textAlign: 'center' }}>{item.date || filterDate} {item.time || item.advanceTime || ''}</td>
                       <td style={{ padding: '8px', textAlign: 'center', fontWeight: 'bold', color: item.paid === 'YES' ? '#16a34a' : '#dc2626' }}>
@@ -423,11 +433,15 @@ export default function Advance({ user, onLogout }) {
                         </div>
                       </td>
                     </tr>
-                  ))}
+                    );
+                  })}
                   <tr style={{ backgroundColor: '#f8fafc', fontWeight: 'bold' }}>
                     <td colSpan="3" align="right" style={{ padding: '10px' }}>Totals:</td>
                     <td align="right" style={{ padding: '10px', color: '#334155' }}>
                       ₹{totalOldBalance.toLocaleString()}
+                    </td>
+                    <td align="right" style={{ padding: '10px', color: '#1e40af' }}>
+                      ₹{totalNetAmount.toLocaleString()}
                     </td>
                     <td align="right" style={{ padding: '10px', color: '#dc2626', fontSize: '1.1rem' }}>
                       ₹{totalAdvanceAmount.toLocaleString()}

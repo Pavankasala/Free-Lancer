@@ -111,12 +111,21 @@ def handle_advance():
         rows = [dict(row) for row in cursor.fetchall()]
         for r in rows:
             r["no_of_bags"] = r.get("display_bags") or r.get("no_of_bags") or 0
-            old_bal = float(r.get("display_total") or 0.0)
+            gross = float(r.get("display_total") or 0.0)
+            hamali_val = float(r.get("hamali") or 0.0)
+            bill_type = str(r.get("type") or "")
+            if bill_type == "BUY":
+                commission_val = round(gross * 0.04)
+                damage_val = round(gross * 0.06)
+                net_amount = max(0.0, gross - commission_val - hamali_val - damage_val)
+            else:
+                net_amount = gross  # BUYER/ADVANCE: no deductions
             adv = float(r.get("advance") or 0.0)
-            r["old_balance"] = old_bal
-            is_paid = (str(r.get("paid") or "").upper() == "YES") or (old_bal > 0 and adv >= old_bal)
+            r["old_balance"] = gross
+            r["net_amount"] = net_amount
+            is_paid = (str(r.get("paid") or "").upper() == "YES") or (net_amount > 0 and adv >= net_amount)
             r["paid"] = "YES" if is_paid else "NO"
-            r["remaining_to_pay"] = 0.0 if is_paid else max(old_bal - adv, 0.0)
+            r["remaining_to_pay"] = 0.0 if is_paid else max(net_amount - adv, 0.0)
             src = r.get("source_kisan_name")
             nm = r.get("name")
             if not nm and src:

@@ -38,13 +38,29 @@ export default function BuyersDetails({ user, onLogout }) {
 
   const fetchBills = async (selectedDate) => {
     try {
-      const res = await axios.get(`${API_BASE_URL}/api/buyer-bills?date=${selectedDate}`);
+      const token = localStorage.getItem('token');
+      const res = await axios.get(`${API_BASE_URL}/api/buyer-bills?date=${selectedDate}`, {
+        headers: token ? { Authorization: `Bearer ${token}` } : {}
+      });
       if (res.data && res.data.success) {
         const apiBills = res.data.bills || [];
         setBills(apiBills);
       }
     } catch (err) {
       setBills([]);
+    }
+  };
+
+  const handleMarkPaid = async (bill) => {
+    const newPaid = bill.paid === 'YES' ? 'NO' : 'YES';
+    try {
+      const token = localStorage.getItem('token');
+      await axios.post(`${API_BASE_URL}/api/mark-bill-paid/${bill.id}`, { paid: newPaid }, {
+        headers: token ? { Authorization: `Bearer ${token}` } : {}
+      });
+      fetchBills(billdate);
+    } catch (err) {
+      console.error('Error marking bill paid:', err);
     }
   };
 
@@ -416,6 +432,7 @@ export default function BuyersDetails({ user, onLogout }) {
                     <th style={{ padding: '8px', textAlign: 'left' }}>Buyer Name</th>
                     <th style={{ padding: '8px', textAlign: 'center' }}>Bags</th>
                     <th style={{ padding: '8px', textAlign: 'right' }}>Total (₹)</th>
+                    <th style={{ padding: '8px', textAlign: 'right' }}>Net Amount (₹)</th>
                     <th style={{ padding: '8px', textAlign: 'right' }}>Advance (₹)</th>
                     <th style={{ padding: '8px', textAlign: 'center' }}>Date & Time</th>
                     <th style={{ padding: '8px', textAlign: 'center' }}>Paid</th>
@@ -423,12 +440,17 @@ export default function BuyersDetails({ user, onLogout }) {
                   </tr>
                 </thead>
                 <tbody>
-                  {bills.map((b, idx) => (
+                  {bills.map((b, idx) => {
+                    const gross = Number(b.total_amount || (b.no_of_bags * b.price)) || 0;
+                    // BUYER: net = gross (no commission/hamali deductions)
+                    const net = gross;
+                    return (
                     <tr key={b.id || idx} style={{ borderBottom: '1px solid #e2e8f0', backgroundColor: idx % 2 === 0 ? '#ffffff' : '#f8fafc' }}>
                       <td style={{ padding: '8px' }}>{idx + 1}</td>
                       <td style={{ padding: '8px', fontWeight: 'bold', color: '#0f172a' }}>{b.name}</td>
                       <td style={{ padding: '8px', textAlign: 'center' }}>{b.no_of_bags}</td>
-                      <td style={{ padding: '8px', textAlign: 'right', fontWeight: 'bold' }}>₹{(b.no_of_bags * b.price).toLocaleString()}</td>
+                      <td style={{ padding: '8px', textAlign: 'right', fontWeight: 'bold' }}>₹{gross.toLocaleString()}</td>
+                      <td style={{ padding: '8px', textAlign: 'right', fontWeight: 'bold', color: '#1e40af' }}>₹{net.toLocaleString()}</td>
                       <td style={{ padding: '8px', textAlign: 'right', color: '#dc2626' }}>
                         ₹{Number(b.advance || 0).toLocaleString()}
                         <span
@@ -450,7 +472,7 @@ export default function BuyersDetails({ user, onLogout }) {
                       <td style={{ padding: '8px', textAlign: 'center', fontSize: '13px' }}>{b.date || billdate} {b.time || b.advanceTime || ''}</td>
                       <td style={{ padding: '8px', textAlign: 'center', fontWeight: 'bold', color: b.paid === 'YES' ? '#16a34a' : '#dc2626' }}>{b.paid || 'NO'}</td>
                       <td style={{ padding: '8px', textAlign: 'center' }}>
-                        <div style={{ display: 'flex', gap: '4px', justifyContent: 'center' }}>
+                        <div style={{ display: 'flex', gap: '4px', justifyContent: 'center', flexWrap: 'wrap' }}>
                           <button
                             type="button"
                             onClick={() => setSelectedBill(b)}
@@ -467,6 +489,13 @@ export default function BuyersDetails({ user, onLogout }) {
                           </button>
                           <button
                             type="button"
+                            onClick={() => handleMarkPaid(b)}
+                            style={{ backgroundColor: b.paid === 'YES' ? '#64748b' : '#16a34a', color: '#ffffff', border: 'none', borderRadius: '4px', padding: '4px 8px', cursor: 'pointer', fontSize: '12px', fontWeight: 'bold' }}
+                          >
+                            {b.paid === 'YES' ? 'Unmark' : '✓ Paid'}
+                          </button>
+                          <button
+                            type="button"
                             onClick={() => setConfirmDeleteId(b.id)}
                             style={{ backgroundColor: '#dc2626', color: '#ffffff', border: 'none', borderRadius: '4px', padding: '4px 8px', cursor: 'pointer', fontSize: '12px', fontWeight: 'bold' }}
                           >
@@ -475,7 +504,8 @@ export default function BuyersDetails({ user, onLogout }) {
                         </div>
                       </td>
                     </tr>
-                  ))}
+                    );
+                  })}
                 </tbody>
               </table>
             )}
