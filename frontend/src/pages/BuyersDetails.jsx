@@ -78,6 +78,7 @@ export default function BuyersDetails({ user, onLogout }) {
     }
     setHamali(b.hamali || 0);
     setAdvance(b.advance || '');
+    setPaymentMode(b.paymentMode || b.payment_mode || 'CASH');
     setBagsSold(b.bagsSold || '');
     setPriceSold(b.priceSold || '');
     window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -88,6 +89,7 @@ export default function BuyersDetails({ user, onLogout }) {
     setName('');
     setChannels([{ kisanName: '', bags: '', price: '' }]);
     setAdvance('');
+    setPaymentMode('CASH');
     setBagsSold('');
     setPriceSold('');
   };
@@ -128,17 +130,31 @@ export default function BuyersDetails({ user, onLogout }) {
     };
 
     try {
-      await axios.post(`${API_BASE_URL}/api/add-buyer-bill`, {
-        name,
-        billdate,
-        advanceTime,
-        items: channels,
-        hamali,
-        advance,
-        paymentMode,
-        bagsSold,
-        priceSold
-      });
+      if (editingBillId) {
+        await axios.put(`${API_BASE_URL}/api/update-buyer-bill/${editingBillId}`, {
+          name,
+          billdate,
+          advanceTime,
+          items: channels,
+          hamali,
+          advance,
+          paymentMode,
+          bagsSold,
+          priceSold
+        });
+      } else {
+        await axios.post(`${API_BASE_URL}/api/add-buyer-bill`, {
+          name,
+          billdate,
+          advanceTime,
+          items: channels,
+          hamali,
+          advance,
+          paymentMode,
+          bagsSold,
+          priceSold
+        });
+      }
     } catch (err) {}
 
     alert(editingBillId ? 'Updated successfully' : 'Saved successfully');
@@ -146,6 +162,7 @@ export default function BuyersDetails({ user, onLogout }) {
     setName('');
     setChannels([{ kisanName: '', bags: '', price: '' }]);
     setAdvance('');
+    setPaymentMode('CASH');
     setBagsSold('');
     setPriceSold('');
     fetchBills(billdate);
@@ -398,7 +415,6 @@ export default function BuyersDetails({ user, onLogout }) {
                     <th style={{ padding: '8px', textAlign: 'left' }}>S.No</th>
                     <th style={{ padding: '8px', textAlign: 'left' }}>Buyer Name</th>
                     <th style={{ padding: '8px', textAlign: 'center' }}>Bags</th>
-                    <th style={{ padding: '8px', textAlign: 'center' }}>Price</th>
                     <th style={{ padding: '8px', textAlign: 'right' }}>Total (₹)</th>
                     <th style={{ padding: '8px', textAlign: 'right' }}>Advance (₹)</th>
                     <th style={{ padding: '8px', textAlign: 'center' }}>Date & Time</th>
@@ -412,9 +428,25 @@ export default function BuyersDetails({ user, onLogout }) {
                       <td style={{ padding: '8px' }}>{idx + 1}</td>
                       <td style={{ padding: '8px', fontWeight: 'bold', color: '#0f172a' }}>{b.name}</td>
                       <td style={{ padding: '8px', textAlign: 'center' }}>{b.no_of_bags}</td>
-                      <td style={{ padding: '8px', textAlign: 'center' }}>₹{b.price}</td>
                       <td style={{ padding: '8px', textAlign: 'right', fontWeight: 'bold' }}>₹{(b.no_of_bags * b.price).toLocaleString()}</td>
-                      <td style={{ padding: '8px', textAlign: 'right', color: '#dc2626' }}>₹{Number(b.advance || 0).toLocaleString()}</td>
+                      <td style={{ padding: '8px', textAlign: 'right', color: '#dc2626' }}>
+                        ₹{Number(b.advance || 0).toLocaleString()}
+                        <span
+                          style={{
+                            display: 'inline-block',
+                            fontSize: '11px',
+                            color: (b.paymentMode || b.payment_mode) === 'UPI' ? '#2563eb' : '#15803d',
+                            backgroundColor: (b.paymentMode || b.payment_mode) === 'UPI' ? '#eff6ff' : '#f0fdf4',
+                            padding: '2px 6px',
+                            borderRadius: '4px',
+                            border: `1px solid ${(b.paymentMode || b.payment_mode) === 'UPI' ? '#bfdbfe' : '#bbf7d0'}`,
+                            marginLeft: '6px',
+                            fontWeight: 'bold'
+                          }}
+                        >
+                          {(b.paymentMode || b.payment_mode) === 'UPI' ? '📱 UPI' : '💵 Cash'}
+                        </span>
+                      </td>
                       <td style={{ padding: '8px', textAlign: 'center', fontSize: '13px' }}>{b.date || billdate} {b.time || b.advanceTime || ''}</td>
                       <td style={{ padding: '8px', textAlign: 'center', fontWeight: 'bold', color: b.paid === 'YES' ? '#16a34a' : '#dc2626' }}>{b.paid || 'NO'}</td>
                       <td style={{ padding: '8px', textAlign: 'center' }}>

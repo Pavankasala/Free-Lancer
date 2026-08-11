@@ -3,12 +3,6 @@ import axios from 'axios';
 import Header from '../components/Header';
 import { API_BASE_URL } from '../api/config';
 
-const DEFAULT_KISANS = [
-  'SSL', 'pmr', 'allamma', 'CHR', 'PLR', 'ARR', 'DPR', 'NB',
-  'VRR', 'RRV', 'gdr', 'MVS', 'msrm', 'ksr thathia', 'ASR',
-  'AVR', 'BVS', 'JDK', 'JN', 'JR', 'K harsha', 'KAR', 'KPRB', 'KR'
-];
-
 export default function Advance({ user, onLogout }) {
   const [advanceDate, setAdvanceDate] = useState(new Date().toISOString().split('T')[0]);
   const [multiDate, setMultiDate] = useState(new Date().toISOString().split('T')[0]);
@@ -16,14 +10,8 @@ export default function Advance({ user, onLogout }) {
   const [singleAmount, setSingleAmount] = useState('0');
   const [editingAdvanceId, setEditingAdvanceId] = useState(null);
 
-  // Multi advance state for list of kisans - default to '0'
-  const [multiAdvances, setMultiAdvances] = useState(() => {
-    const initial = {};
-    DEFAULT_KISANS.forEach(k => {
-      initial[k] = '0';
-    });
-    return initial;
-  });
+  // Multi advance state for list of kisans
+  const [multiAdvances, setMultiAdvances] = useState({});
 
   const [filterDate, setFilterDate] = useState(new Date().toISOString().split('T')[0]);
   const [filterKisan, setFilterKisan] = useState('');
@@ -31,22 +19,57 @@ export default function Advance({ user, onLogout }) {
   const [searched, setSearched] = useState(false);
   const [confirmDeleteId, setConfirmDeleteId] = useState(null);
 
-  const [kisanOptions, setKisanOptions] = useState(DEFAULT_KISANS);
+  const [kisanOptions, setKisanOptions] = useState([]);
+
+  const getAuthHeader = () => {
+    const token = localStorage.getItem('token');
+    return token ? { Authorization: `Bearer ${token}` } : {};
+  };
 
   useEffect(() => {
     const fetchKisans = async () => {
       try {
-        const res = await axios.get(`${API_BASE_URL}/api/home-bills`);
-        if (res.data && res.data.success && Array.isArray(res.data.bills)) {
-          const namesFromBills = res.data.bills.map(b => b.name).filter(Boolean);
-          const unique = Array.from(new Set([...DEFAULT_KISANS, ...namesFromBills]));
-          setKisanOptions(unique);
+        const headers = getAuthHeader();
+        const [homeRes, kisansRes, buyerRes] = await Promise.allSettled([
+          axios.get(`${API_BASE_URL}/api/home-bills`, { headers }),
+          axios.get(`${API_BASE_URL}/api/kisans`, { headers }),
+          axios.get(`${API_BASE_URL}/api/buyer-bills`, { headers })
+        ]);
+
+        let extraNames = [];
+        if (homeRes.status === 'fulfilled' && homeRes.value.data?.success && Array.isArray(homeRes.value.data.bills)) {
+          extraNames.push(...homeRes.value.data.bills.map(b => b.name));
         }
+        if (kisansRes.status === 'fulfilled' && kisansRes.value.data?.success && Array.isArray(kisansRes.value.data.kisans)) {
+          extraNames.push(...kisansRes.value.data.kisans.map(k => k.name));
+        }
+        if (buyerRes.status === 'fulfilled' && buyerRes.value.data?.success && Array.isArray(buyerRes.value.data.bills)) {
+          buyerRes.value.data.bills.forEach(b => {
+            if (b.channels && Array.isArray(b.channels)) {
+              b.channels.forEach(ch => {
+                if (ch.kisanName) extraNames.push(ch.kisanName);
+              });
+            }
+          });
+        }
+
+        const validNames = extraNames.filter(Boolean).map(n => n.trim());
+        const unique = Array.from(new Set(validNames));
+        setKisanOptions(unique);
       } catch (e) {}
     };
     fetchKisans();
   }, []);
 
+  useEffect(() => {
+    setMultiAdvances(prev => {
+      const updated = { ...prev };
+      kisanOptions.forEach(k => {
+        if (updated[k] === undefined) updated[k] = '0';
+      });
+      return updated;
+    });
+  }, [kisanOptions]);
 
   const handleSingleSubmit = async (e) => {
     e.preventDefault();
@@ -65,22 +88,24 @@ export default function Advance({ user, onLogout }) {
           name: selectedKisan,
           date: advanceDate,
           amount: Number(singleAmount) || 0
-        });
+        }, { headers: getAuthHeader() });
         alert(`Advance updated successfully for ${selectedKisan}`);
       } else {
         await axios.post(`${API_BASE_URL}/api/advance`, {
           name: selectedKisan,
           date: advanceDate,
           amount: Number(singleAmount) || 0
-        });
+        }, { headers: getAuthHeader() });
         alert(`Advance of ₹${singleAmount} added for ${selectedKisan}`);
       }
     } catch (err) {}
 
     setEditingAdvanceId(null);
+    setFilterDate(advanceDate);
+    setFilterKisan(selectedKisan);
     setSelectedKisan('');
     setSingleAmount('0');
-    fetchAdvanceDetails();
+    fetchAdvanceDetails(advanceDate, selectedKisan);
   };
 
   const handleMultiChange = (kisan, value) => {
@@ -109,11 +134,15 @@ export default function Advance({ user, onLogout }) {
       await axios.post(`${API_BASE_URL}/api/add-multi-advance`, {
         date: multiDate,
         advances: activeAdvances
-      });
+      }, { headers: getAuthHeader() });
       alert(`Multi Advance saved for ${Object.keys(activeAdvances).length} kisans successfully`);
+      const reset = {};
+      kisanOptions.forEach(k => { reset[k] = '0'; });
+      setMultiAdvances(reset);
+      setFilterDate(multiDate);
+      setFilterKisan('');
+      fetchAdvanceDetails(multiDate, '');
     } catch (err) {}
-
-    fetchAdvanceDetails();
   };
 
   const handleEditAdvance = (item) => {
@@ -133,14 +162,14 @@ export default function Advance({ user, onLogout }) {
   const handleDeleteAdvance = async (id) => {
     setAdvanceList(prev => prev.filter(b => b.id !== id));
     try {
-      await axios.delete(`${API_BASE_URL}/api/delete-advance/${id}`);
+      await axios.delete(`${API_BASE_URL}/api/delete-advance/${id}`, { headers: getAuthHeader() });
       fetchAdvanceDetails();
     } catch (e) {}
   };
 
-  const fetchAdvanceDetails = async () => {
+  const fetchAdvanceDetails = async (overrideDate = filterDate, overrideKisan = filterKisan) => {
     try {
-      const res = await axios.get(`${API_BASE_URL}/api/advances?date=${filterDate}&kisan=${filterKisan}`);
+      const res = await axios.get(`${API_BASE_URL}/api/advances?date=${overrideDate}&kisan=${overrideKisan}`, { headers: getAuthHeader() });
       if (res.data && res.data.success) {
         setAdvanceList(res.data.advances || []);
       }
@@ -151,7 +180,7 @@ export default function Advance({ user, onLogout }) {
   };
 
   useEffect(() => {
-    fetchAdvanceDetails();
+    fetchAdvanceDetails(filterDate, filterKisan);
   }, []);
 
   const totalAdvanceAmount = advanceList.reduce((acc, b) => acc + (Number(b.advance) || 0), 0);
@@ -187,6 +216,7 @@ export default function Advance({ user, onLogout }) {
               <div style={{ marginBottom: '12px', display: 'flex', alignItems: 'center', gap: '8px' }}>
                 <label style={{ width: '100px', fontWeight: 'bold', fontSize: '14px' }}>Select Kisan:</label>
                 <select
+                  id="single-kisan-select"
                   value={selectedKisan}
                   onChange={(e) => setSelectedKisan(e.target.value)}
                   required
@@ -311,10 +341,22 @@ export default function Advance({ user, onLogout }) {
 
             <button
               type="button"
-              onClick={fetchAdvanceDetails}
+              onClick={() => fetchAdvanceDetails(filterDate, filterKisan)}
               style={{ backgroundColor: '#2563eb', color: 'white', border: 'none', borderRadius: '4px', padding: '6px 16px', fontWeight: 'bold', cursor: 'pointer' }}
             >
               Get Advance Details
+            </button>
+
+            <button
+              type="button"
+              onClick={() => {
+                setFilterDate('');
+                setFilterKisan('');
+                fetchAdvanceDetails('', '');
+              }}
+              style={{ backgroundColor: '#64748b', color: 'white', border: 'none', borderRadius: '4px', padding: '6px 14px', fontWeight: 'bold', cursor: 'pointer' }}
+            >
+              Clear Filters (Show All)
             </button>
           </div>
 

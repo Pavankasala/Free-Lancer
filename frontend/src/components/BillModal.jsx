@@ -50,7 +50,7 @@ function BillModal({ bill, isBuyerPage, onClose }) {
 
   // PDF Export Feature
   const handleDownloadPDF = async () => {
-    const element = document.getElementById("printable-bill");
+    const element = document.getElementById("thermal-slip-view") || document.getElementById("printable-bill");
     if (!element) return;
 
     setIsDownloading(true);
@@ -75,6 +75,82 @@ function BillModal({ bill, isBuyerPage, onClose }) {
     } finally {
       setIsDownloading(false);
     }
+  };
+
+  // Isolated Thermal Receipt Print Handler
+  const handlePrint = () => {
+    const slipElement = document.getElementById("thermal-slip-view");
+    if (!slipElement) {
+      window.print();
+      return;
+    }
+
+    const printFrame = document.createElement("iframe");
+    printFrame.style.position = "fixed";
+    printFrame.style.right = "0";
+    printFrame.style.bottom = "0";
+    printFrame.style.width = "0";
+    printFrame.style.height = "0";
+    printFrame.style.border = "none";
+    document.body.appendChild(printFrame);
+
+    const frameDoc = printFrame.contentWindow.document;
+    frameDoc.open();
+    frameDoc.write(`
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <title></title>
+          <style>
+            @page {
+              size: auto;
+              margin: 5mm;
+            }
+            body {
+              margin: 0;
+              padding: 10px;
+              font-family: monospace;
+              background-color: #ffffff;
+              display: flex;
+              justify-content: center;
+              align-items: flex-start;
+              -webkit-print-color-adjust: exact;
+              print-color-adjust: exact;
+            }
+            #thermal-slip-view {
+              border: 1px dashed #64748b !important;
+              padding: 16px !important;
+              background-color: #ffffff !important;
+              border-radius: 8px !important;
+              font-family: monospace !important;
+              width: 340px !important;
+              max-width: 100% !important;
+              box-sizing: border-box !important;
+              break-inside: avoid !important;
+              page-break-inside: avoid !important;
+              color: #000000 !important;
+            }
+          </style>
+        </head>
+        <body>
+          <div id="thermal-slip-view">
+            ${slipElement.innerHTML}
+          </div>
+          <script>
+            window.onload = function() {
+              window.focus();
+              window.print();
+              setTimeout(function() {
+                if (window.frameElement) {
+                  window.frameElement.remove();
+                }
+              }, 1000);
+            };
+          </script>
+        </body>
+      </html>
+    `);
+    frameDoc.close();
   };
 
   // Smart SMS / Messaging dispatch
@@ -179,7 +255,7 @@ function BillModal({ bill, isBuyerPage, onClose }) {
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal-content" onClick={(e) => e.stopPropagation()}>
         {/* Modal Header */}
-        <div className="modal-header" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", borderBottom: "1px solid #e2e8f0", paddingBottom: "12px" }}>
+        <div className="modal-header no-print" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", borderBottom: "1px solid #e2e8f0", paddingBottom: "12px" }}>
           <h2 style={{ fontSize: "1.2rem", margin: 0, color: "#166534" }}>📄 Invoice Receipt - Agri Commission Manager</h2>
           <button className="close-btn" onClick={onClose} style={{ background: "none", border: "none", fontSize: "1.5rem", cursor: "pointer", color: "#64748b" }}>
             ×
@@ -188,7 +264,7 @@ function BillModal({ bill, isBuyerPage, onClose }) {
 
         {statusMessage && (
           <div
-            className="badge margin-bottom"
+            className="badge margin-bottom no-print"
             style={{
               display: "block",
               textAlign: "center",
@@ -207,17 +283,17 @@ function BillModal({ bill, isBuyerPage, onClose }) {
 
         {/* Printable Bill Area */}
         <div className="bill-receipt-body" id="printable-bill" style={{ padding: "16px", backgroundColor: "#ffffff" }}>
-          <div className="receipt-header" style={{ textAlign: "center", marginBottom: "12px" }}>
+          <div className="receipt-header no-print" style={{ textAlign: "center", marginBottom: "12px" }}>
             <h3 style={{ margin: 0, color: "#15803d", fontSize: "1.4rem", fontWeight: "bold" }}>AGRI COMMISSION MANAGER</h3>
             <p className="receipt-sub" style={{ margin: "4px 0", fontSize: "0.88rem", color: "#475569" }}>
               AGRICULTURAL COMMISSION BILL & RECEIPT
             </p>
           </div>
 
-          <hr className="divider-line" style={{ border: "none", borderTop: "1px solid #cbd5e1", margin: "12px 0" }} />
+          <hr className="divider-line no-print" style={{ border: "none", borderTop: "1px solid #cbd5e1", margin: "12px 0" }} />
 
           {/* Receipt Metadata Section with Date & Time */}
-          <div className="receipt-meta" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px", fontSize: "0.9rem", marginBottom: "12px" }}>
+          <div className="receipt-meta no-print" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px", fontSize: "0.9rem", marginBottom: "12px" }}>
             <div>
               <span>Receipt No:</span> <strong>#AGRI-{bill.id || 101}</strong>
             </div>
@@ -250,10 +326,11 @@ function BillModal({ bill, isBuyerPage, onClose }) {
           </div>
 
           {/* Lots Breakdown Table */}
-          <table className="data-table receipt-table margin-top" style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.85rem", margin: "12px 0" }}>
+          <table className="data-table receipt-table margin-top no-print" style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.85rem", margin: "12px 0" }}>
             <thead>
               <tr style={{ backgroundColor: "#f1f5f9", color: "#1e293b" }}>
                 <th style={{ border: "1px solid #cbd5e1", padding: "6px" }}>Lot / Description</th>
+                {isBuyerBill && <th style={{ border: "1px solid #cbd5e1", padding: "6px" }}>Kisan Name</th>}
                 <th style={{ border: "1px solid #cbd5e1", padding: "6px" }}>Bags</th>
                 <th style={{ border: "1px solid #cbd5e1", padding: "6px" }}>Price / Bag</th>
                 <th style={{ border: "1px solid #cbd5e1", padding: "6px" }}>Date & Time</th>
@@ -266,6 +343,7 @@ function BillModal({ bill, isBuyerPage, onClose }) {
                 bill.channels.map((ch, idx) => (
                   <tr key={idx}>
                     <td style={{ border: "1px solid #cbd5e1", padding: "6px" }}>Lot #{idx + 1}</td>
+                    {isBuyerBill && <td style={{ border: "1px solid #cbd5e1", padding: "6px" }}>{ch.kisanName || ch.kisan_name || ch.kisan || ch.farmerName || "-"}</td>}
                     <td style={{ border: "1px solid #cbd5e1", padding: "6px", textAlign: "center" }}>{ch.bags}</td>
                     <td style={{ border: "1px solid #cbd5e1", padding: "6px", textAlign: "center" }}>₹{ch.price}</td>
                     <td style={{ border: "1px solid #cbd5e1", padding: "6px", textAlign: "center" }}>{ch.date || billDate} {billTime}</td>
@@ -285,6 +363,7 @@ function BillModal({ bill, isBuyerPage, onClose }) {
               ) : (
                 <tr>
                   <td style={{ border: "1px solid #cbd5e1", padding: "6px" }}>Bags Lot</td>
+                  {isBuyerBill && <td style={{ border: "1px solid #cbd5e1", padding: "6px" }}>{bill.kisanName || farmerName || "-"}</td>}
                   <td style={{ border: "1px solid #cbd5e1", padding: "6px", textAlign: "center" }}>{totalBagsCount}</td>
                   <td style={{ border: "1px solid #cbd5e1", padding: "6px", textAlign: "center" }}>₹{bill.price || (totalBagsCount > 0 ? grossTotal / totalBagsCount : 0)}</td>
                   <td style={{ border: "1px solid #cbd5e1", padding: "6px", textAlign: "center" }}>{billDate} {billTime}</td>
@@ -314,7 +393,7 @@ function BillModal({ bill, isBuyerPage, onClose }) {
           </table>
 
           {/* Summary Breakdown with Commission (4%) and Damage (5%) */}
-          <div className="receipt-summary margin-top" style={{ display: "flex", flexDirection: "column", gap: "4px", fontSize: "0.88rem", marginTop: "12px", borderTop: "1px dashed #cbd5e1", paddingTop: "8px" }}>
+          <div className="receipt-summary margin-top no-print" style={{ display: "flex", flexDirection: "column", gap: "4px", fontSize: "0.88rem", marginTop: "12px", borderTop: "1px dashed #cbd5e1", paddingTop: "8px" }}>
             <div className="summary-row highlight-total" style={{ display: "flex", justifyContent: "space-between", fontWeight: "bold" }}>
               <span>Total Bags:</span>
               <strong>{totalBagsCount} Bags</strong>
@@ -368,8 +447,9 @@ function BillModal({ bill, isBuyerPage, onClose }) {
             </div>
             <div style={{ borderTop: "1px dashed #334155", margin: "8px 0" }}></div>
             
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", fontSize: "13px", fontWeight: "bold", marginBottom: "4px" }}>
-              <span>QTY</span>
+            <div style={{ display: "grid", gridTemplateColumns: isBuyerBill ? "1.2fr 0.6fr 1fr 1fr" : "1fr 1fr 1fr", fontSize: "13px", fontWeight: "bold", marginBottom: "4px" }}>
+              {isBuyerBill && <span>KISAN</span>}
+              <span style={{ textAlign: isBuyerBill ? "center" : "left" }}>QTY</span>
               <span style={{ textAlign: "center" }}>PRICE</span>
               <span style={{ textAlign: "right" }}>AMT</span>
             </div>
@@ -377,15 +457,25 @@ function BillModal({ bill, isBuyerPage, onClose }) {
 
             {bill.channels && bill.channels.length > 0 ? (
               bill.channels.map((ch, idx) => (
-                <div key={idx} style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", fontSize: "13px", marginBottom: "4px" }}>
-                  <span>{ch.bags}</span>
+                <div key={idx} style={{ display: "grid", gridTemplateColumns: isBuyerBill ? "1.2fr 0.6fr 1fr 1fr" : "1fr 1fr 1fr", fontSize: "13px", marginBottom: "4px" }}>
+                  {isBuyerBill && (
+                    <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                      {ch.kisanName || ch.kisan_name || ch.kisan || ch.farmerName || farmerName || "-"}
+                    </span>
+                  )}
+                  <span style={{ textAlign: isBuyerBill ? "center" : "left" }}>{ch.bags}</span>
                   <span style={{ textAlign: "center" }}>{ch.price}</span>
                   <span style={{ textAlign: "right" }}>{ch.bags * ch.price}</span>
                 </div>
               ))
             ) : (
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", fontSize: "13px", marginBottom: "4px" }}>
-                <span>{totalBagsCount}</span>
+              <div style={{ display: "grid", gridTemplateColumns: isBuyerBill ? "1.2fr 0.6fr 1fr 1fr" : "1fr 1fr 1fr", fontSize: "13px", marginBottom: "4px" }}>
+                {isBuyerBill && (
+                  <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                    {bill.kisanName || farmerName || "-"}
+                  </span>
+                )}
+                <span style={{ textAlign: isBuyerBill ? "center" : "left" }}>{totalBagsCount}</span>
                 <span style={{ textAlign: "center" }}>{bill.price || (totalBagsCount > 0 ? grossTotal / totalBagsCount : 0)}</span>
                 <span style={{ textAlign: "right" }}>{grossTotal}</span>
               </div>
@@ -427,6 +517,13 @@ function BillModal({ bill, isBuyerPage, onClose }) {
               </div>
             )}
 
+            {isBuyerBill && advanceVal > 0 && (
+              <div style={{ display: "flex", justifyContent: "space-between", fontSize: "13px", margin: "4px 0" }}>
+                <span>Advance Paid ({bill.paymentMode || bill.payment_mode || "CASH"})</span>
+                <span>- {advanceVal}</span>
+              </div>
+            )}
+
             <div style={{ display: "flex", justifyContent: "space-between", fontSize: "15px", fontWeight: "bold", margin: "6px 0" }}>
               <span>{isBuyerBill ? "Nett Payable" : "Nett"}</span>
               <span>{netPayable}</span>
@@ -440,7 +537,7 @@ function BillModal({ bill, isBuyerPage, onClose }) {
         </div>
 
         {/* Modal Action Buttons */}
-        <div className="modal-actions" style={{ display: "flex", gap: "8px", flexWrap: "wrap", justifyContent: "flex-end", marginTop: "16px", borderTop: "1px solid #e2e8f0", paddingTop: "12px" }}>
+        <div className="modal-actions no-print" style={{ display: "flex", gap: "8px", flexWrap: "wrap", justifyContent: "flex-end", marginTop: "16px", borderTop: "1px solid #e2e8f0", paddingTop: "12px" }}>
           <button
             type="button"
             className="secondary-btn"
@@ -470,7 +567,7 @@ function BillModal({ bill, isBuyerPage, onClose }) {
           <button
             type="button"
             className="secondary-btn"
-            onClick={() => window.print()}
+            onClick={handlePrint}
             style={{ padding: "8px 14px", borderRadius: "6px", border: "1px solid #cbd5e1", backgroundColor: "#f8fafc", cursor: "pointer", fontWeight: "bold" }}
           >
             🖨️ Print Bill

@@ -42,11 +42,28 @@ def handle_advance():
             p = db.ph()
             cursor.execute(
                 f"""
-                INSERT INTO inventory (user_id, name, date, time, type, advance, paid, confirmed)
-                VALUES ({p}, {p}, {p}, {p}, 'ADVANCE', {p}, 'NO', {p})
+                SELECT id, advance FROM inventory
+                WHERE user_id = {p} AND date = {p} AND (LOWER(name) = {p} OR LOWER(COALESCE(source_kisan_name, '')) = {p})
+                ORDER BY id DESC LIMIT 1
                 """,
-                (g.user_id, name, advance_date, bill_time, amount, False),
+                (g.user_id, advance_date, name.lower(), name.lower()),
             )
+            row = cursor.fetchone()
+            if row:
+                row_dict = dict(row)
+                new_advance = float(row_dict.get("advance") or 0) + amount
+                cursor.execute(
+                    f"UPDATE inventory SET advance = {p} WHERE id = {p} AND user_id = {p}",
+                    (new_advance, row_dict["id"], g.user_id),
+                )
+            else:
+                cursor.execute(
+                    f"""
+                    INSERT INTO inventory (user_id, name, date, time, type, advance, paid, confirmed)
+                    VALUES ({p}, {p}, {p}, {p}, 'ADVANCE', {p}, 'NO', {p})
+                    """,
+                    (g.user_id, name, advance_date, bill_time, amount, False),
+                )
             conn.commit()
             return jsonify({"success": True, "message": "Advance added successfully"}), 200
         finally:
@@ -58,17 +75,47 @@ def handle_advance():
     try:
         cursor = conn.cursor()
         p = db.ph()
-        query = f"SELECT * FROM inventory WHERE user_id = {p} AND type = 'ADVANCE'"
-        params = [g.user_id]
+
+        # Subquery to get total bags per bill_group_id
+        group_bags_sub = f"""
+            SELECT bill_group_id, SUM(no_of_bags) AS total_bags
+            FROM inventory
+            WHERE user_id = {p} AND bill_group_id IS NOT NULL
+            GROUP BY bill_group_id
+        """
+
+        query = f"""
+            SELECT i.*,
+                COALESCE(grp.total_bags, i.no_of_bags) AS display_bags
+            FROM inventory i
+            LEFT JOIN ({group_bags_sub}) grp ON i.bill_group_id = grp.bill_group_id
+            WHERE i.user_id = {p}
+              AND (i.type IN ('ADVANCE', 'BUY', 'BUYER') OR (i.advance IS NOT NULL AND i.advance > 0))
+              AND (i.advance IS NOT NULL AND i.advance > 0 OR i.type = 'ADVANCE')
+        """
+        params = [g.user_id, g.user_id]
+
         if date:
-            query += f" AND date = {p}"
+            query += f" AND i.date = {p}"
             params.append(date)
         if kisan:
-            query += f" AND LOWER(name) LIKE {p}"
+            query += f" AND (LOWER(i.name) LIKE {p} OR LOWER(COALESCE(i.source_kisan_name, '')) LIKE {p})"
             params.append(f"%{kisan.lower()}%")
-        query += " ORDER BY id DESC"
+            params.append(f"%{kisan.lower()}%")
+        query += " ORDER BY i.id DESC"
+
         cursor.execute(query, tuple(params))
-        return jsonify({"success": True, "advances": [dict(row) for row in cursor.fetchall()]})
+        rows = [dict(row) for row in cursor.fetchall()]
+        for r in rows:
+            # Use the computed total bags for display
+            r["no_of_bags"] = r.get("display_bags") or r.get("no_of_bags") or 0
+            src = r.get("source_kisan_name")
+            nm = r.get("name")
+            if not nm and src:
+                r["name"] = src
+            elif src and nm and src != nm:
+                r["name"] = f"{nm} ({src})"
+        return jsonify({"success": True, "advances": rows})
     finally:
         conn.close()
 
@@ -103,13 +150,30 @@ def add_multi_advance():
         for name, amount in valid_items:
             cursor.execute(
                 f"""
-                INSERT INTO inventory (user_id, name, date, time, type, advance, paid, confirmed)
-                VALUES ({p}, {p}, {p}, '12:00 PM', 'ADVANCE', {p}, 'NO', {p})
+                SELECT id, advance FROM inventory
+                WHERE user_id = {p} AND date = {p} AND (LOWER(name) = {p} OR LOWER(COALESCE(source_kisan_name, '')) = {p})
+                ORDER BY id DESC LIMIT 1
                 """,
-                (g.user_id, name, advance_date, amount, False),
+                (g.user_id, advance_date, name.lower(), name.lower()),
             )
+            row = cursor.fetchone()
+            if row:
+                row_dict = dict(row)
+                new_advance = float(row_dict.get("advance") or 0) + amount
+                cursor.execute(
+                    f"UPDATE inventory SET advance = {p} WHERE id = {p} AND user_id = {p}",
+                    (new_advance, row_dict["id"], g.user_id),
+                )
+            else:
+                cursor.execute(
+                    f"""
+                    INSERT INTO inventory (user_id, name, date, time, type, advance, paid, confirmed)
+                    VALUES ({p}, {p}, {p}, '12:00 PM', 'ADVANCE', {p}, 'NO', {p})
+                    """,
+                    (g.user_id, name, advance_date, amount, False),
+                )
         conn.commit()
-        return jsonify({"success": True, "message": f"Multi advance added for {len(valid_items)} Kis­ans"}), 200
+        return jsonify({"success": True, "message": f"Multi advance added for {len(valid_items)} Kisans"}), 200
     finally:
         conn.close()
 
@@ -126,6 +190,7 @@ def update_advance(adv_id):
     except ValueError as exc:
         return jsonify({"success": False, "message": str(exc)}), 400
 
+    advance_date = str(data.get("date") or data.get("billdate") or datetime.now().strftime("%Y-%m-%d"))
     conn = db.get_db()
     try:
         cursor = conn.cursor()
@@ -133,9 +198,9 @@ def update_advance(adv_id):
         cursor.execute(
             f"""
             UPDATE inventory SET name = {p}, advance = {p}, date = {p}
-            WHERE id = {p} AND user_id = {p} AND type = 'ADVANCE'
+            WHERE id = {p} AND user_id = {p} AND (type = 'ADVANCE' OR (advance IS NOT NULL AND advance > 0))
             """,
-            (name, amount, str(data.get("date") or ""), adv_id, g.user_id),
+            (name, amount, advance_date, adv_id, g.user_id),
         )
         if cursor.rowcount != 1:
             return jsonify({"success": False, "message": "Advance not found"}), 404
@@ -156,8 +221,13 @@ def delete_advance(adv_id):
             f"DELETE FROM inventory WHERE id = {p} AND user_id = {p} AND type = 'ADVANCE'",
             (adv_id, g.user_id),
         )
-        if cursor.rowcount != 1:
-            return jsonify({"success": False, "message": "Advance not found"}), 404
+        if cursor.rowcount == 0:
+            cursor.execute(
+                f"UPDATE inventory SET advance = 0.0 WHERE id = {p} AND user_id = {p}",
+                (adv_id, g.user_id),
+            )
+            if cursor.rowcount == 0:
+                return jsonify({"success": False, "message": "Advance not found"}), 404
         conn.commit()
         return jsonify({"success": True, "message": "Advance deleted successfully"})
     finally:

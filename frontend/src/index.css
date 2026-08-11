@@ -330,10 +330,78 @@ tbody tr:hover {
    ======================================== */
 
 @media print {
-  header, .no-print, button, nav { display: none !important; }
-  body { background: #fff; font-size: 12px; }
+  @page {
+    size: auto;
+    margin: 5mm;
+  }
+
+  header, nav, button, .no-print {
+    display: none !important;
+  }
+
+  body {
+    background: #ffffff !important;
+    font-size: 12px;
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+
   table { font-size: 11px; }
   th { background-color: #333 !important; -webkit-print-color-adjust: exact; }
+
+  /* Specific print logic for Bill Modal / Thermal Slip */
+  body:has(#thermal-slip-view) header,
+  body:has(#thermal-slip-view) nav,
+  body:has(#thermal-slip-view) .app-container > *:not(.main-content),
+  body:has(#thermal-slip-view) .page-container > *:not(.modal-overlay),
+  body:has(#thermal-slip-view) .no-print {
+    display: none !important;
+  }
+
+  body:has(#thermal-slip-view) .modal-overlay {
+    position: static !important;
+    background: transparent !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    display: block !important;
+    box-shadow: none !important;
+    backdrop-filter: none !important;
+  }
+
+  body:has(#thermal-slip-view) .modal-content {
+    background: transparent !important;
+    border: none !important;
+    box-shadow: none !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    max-width: none !important;
+    max-height: none !important;
+    overflow: visible !important;
+    width: 100% !important;
+  }
+
+  body:has(#thermal-slip-view) .bill-receipt-body {
+    padding: 0 !important;
+    background: transparent !important;
+  }
+
+  #thermal-slip-view {
+    margin: 0 auto !important;
+    box-shadow: none !important;
+    border: 1px dashed #64748b !important;
+    padding: 16px !important;
+    background-color: #ffffff !important;
+    border-radius: 8px !important;
+    font-family: monospace !important;
+    max-width: 340px !important;
+    width: 340px !important;
+    display: block !important;
+    visibility: visible !important;
+    break-inside: avoid !important;
+    page-break-inside: avoid !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
 }
 
 /* ========================================
