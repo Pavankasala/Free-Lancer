@@ -426,7 +426,8 @@ def _save_buyer_bill(bill_id=None):
         return jsonify({"success": False, "message": str(exc)}), 400
 
     payment_mode = str(data.get("paymentMode") or data.get("payment_mode") or "CASH").strip().upper()[:30]
-    paid = "YES" if str(data.get("paid") or "").upper() == "YES" else "NO"
+    total = sum(item["bags"] * item["price"] for item in items)
+    paid = "YES" if total > 0 and advance >= total else "NO"
     bill_date = str(data.get("billdate") or data.get("date") or datetime.now().strftime("%Y-%m-%d"))
     bill_time = str(data.get("time") or data.get("advanceTime") or datetime.now().strftime("%I:%M %p"))
 

@@ -4,8 +4,14 @@ import Header from '../components/Header';
 import { API_BASE_URL } from '../api/config';
 
 export default function Advance({ user, onLogout }) {
-  const [advanceDate, setAdvanceDate] = useState(new Date().toISOString().split('T')[0]);
-  const [multiDate, setMultiDate] = useState(new Date().toISOString().split('T')[0]);
+  const [advanceDate, setAdvanceDate] = useState(() => {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+  });
+  const [multiDate, setMultiDate] = useState(() => {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+  });
   const [selectedKisan, setSelectedKisan] = useState('');
   const [singleAmount, setSingleAmount] = useState('0');
   const [editingAdvanceId, setEditingAdvanceId] = useState(null);

@@ -123,7 +123,11 @@ def handle_advance():
             adv = float(r.get("advance") or 0.0)
             r["old_balance"] = gross
             r["net_amount"] = net_amount
-            is_paid = (str(r.get("paid") or "").upper() == "YES") or (net_amount > 0 and adv >= net_amount)
+            is_paid = (
+                (str(r.get("paid") or "").upper() == "YES")
+                or (net_amount > 0 and adv >= net_amount)
+                or (net_amount == 0 and adv > 0 and str(r.get("type") or "") == "ADVANCE")
+            )
             r["paid"] = "YES" if is_paid else "NO"
             r["remaining_to_pay"] = 0.0 if is_paid else max(net_amount - adv, 0.0)
             src = r.get("source_kisan_name")

@@ -98,31 +98,34 @@ export default function KisanBalance({ user, onLogout }) {
                   <tr style={{ backgroundColor: '#15803d', color: 'white' }}>
                     <th style={{ padding: '8px', textAlign: 'left' }}>S.No.</th>
                     <th style={{ padding: '8px', textAlign: 'left' }}>Kisan Name</th>
-                    <th style={{ padding: '8px', textAlign: 'right' }}>Total Bills Amount (₹)</th>
+                    <th style={{ padding: '8px', textAlign: 'right' }}>Total (₹)</th>
+                    <th style={{ padding: '8px', textAlign: 'right' }}>Net Amount (₹)</th>
                     <th style={{ padding: '8px', textAlign: 'right' }}>Advance Paid (₹)</th>
-                    <th style={{ padding: '8px', textAlign: 'right' }}>Net Balance (₹)</th>
+                    <th style={{ padding: '8px', textAlign: 'right' }}>Remaining Balance (₹)</th>
                     <th style={{ padding: '8px', textAlign: 'center' }}>Action</th>
                   </tr>
                 </thead>
                 <tbody>
                   {balanceData.length === 0 ? (
                     <tr>
-                      <td colSpan="6" align="center" style={{ padding: '16px', color: '#dc2626', fontWeight: 'bold' }}>
+                      <td colSpan="7" align="center" style={{ padding: '16px', color: '#dc2626', fontWeight: 'bold' }}>
                         No Kisan ledger records found for {selectedYear}.
                       </td>
                     </tr>
                   ) : (
                     balanceData.map((b, idx) => {
                       const total = Number(b.no_of_bags) * Number(b.price) || 0;
+                      const net_amount = Number(b.net_amount) || 0;
                       const advance = Number(b.advance) || 0;
-                      const net = total - advance;
+                      const net = net_amount - advance;
                       return (
                         <tr key={b.id || idx} style={{ borderBottom: '1px solid #e2e8f0', backgroundColor: idx % 2 === 0 ? '#ffffff' : '#f8fafc' }}>
                           <td style={{ padding: '8px' }}>{idx + 1}</td>
                           <td style={{ padding: '8px', fontWeight: 'bold', color: '#0f172a' }}>{b.name}</td>
                           <td style={{ padding: '8px', textAlign: 'right' }}>₹{total.toLocaleString()}</td>
+                          <td style={{ padding: '8px', textAlign: 'right' }}>₹{net_amount.toLocaleString()}</td>
                           <td style={{ padding: '8px', textAlign: 'right', color: '#dc2626' }}>₹{advance.toLocaleString()}</td>
-                          <td style={{ padding: '8px', textAlign: 'right', fontWeight: 'bold', color: '#16a34a' }}>₹{net.toLocaleString()}</td>
+                          <td style={{ padding: '8px', textAlign: 'right', fontWeight: 'bold', color: net >= 0 ? '#16a34a' : '#dc2626' }}>₹{net.toLocaleString()}</td>
                           <td style={{ padding: '8px', textAlign: 'center' }}>
                             <button
                               type="button"
