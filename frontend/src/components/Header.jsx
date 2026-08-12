@@ -17,7 +17,7 @@ export default function Header({ user, onLogout }) {
 
   const navLinks = [
     { path: '/home', label: 'Home' },
-    { path: '/buyers-details', label: 'Buyers Details' },
+    { path: '/buyers-details', label: 'Buyer Bills' },
     { path: '/expenditures', label: 'Expenditures' },
     { path: '/cash-collection', label: 'Cash' },
     { path: '/bills', label: 'Bills' },
