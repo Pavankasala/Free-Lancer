@@ -29,6 +29,7 @@ export default function Home({ user, onLogout, onUpdateUser }) {
   const [bagsSold, setBagsSold] = useState('');
   const [priceSold, setPriceSold] = useState('');
   const [bills, setBills] = useState([]);
+  const [viewDate, setViewDate] = useState(new Date().toISOString().split('T')[0]);
   const [selectedBill, setSelectedBill] = useState(null);
   const [confirmDeleteId, setConfirmDeleteId] = useState(null);
   const [editingBillId, setEditingBillId] = useState(null);
@@ -40,10 +41,10 @@ export default function Home({ user, onLogout, onUpdateUser }) {
       await axios.delete(`${API_BASE_URL}/api/delete-bill/${billId}`, {
         headers: token ? { Authorization: `Bearer ${token}` } : {}
       });
-      fetchBills(billdate);
+      fetchBills(viewDate);
     } catch (err) {
       console.error('Error deleting bill:', err);
-      fetchBills(billdate);
+      fetchBills(viewDate);
     }
   };
 
@@ -69,15 +70,15 @@ export default function Home({ user, onLogout, onUpdateUser }) {
       await axios.post(`${API_BASE_URL}/api/mark-bill-paid/${bill.id}`, { paid: newPaid }, {
         headers: token ? { Authorization: `Bearer ${token}` } : {}
       });
-      fetchBills(billdate);
+      fetchBills(viewDate);
     } catch (err) {
       console.error('Error marking bill paid:', err);
     }
   };
 
   useEffect(() => {
-    fetchBills(billdate);
-  }, [billdate]);
+    fetchBills(viewDate);
+  }, [viewDate]);
 
 
   const handleEditClick = (b) => {
@@ -205,7 +206,7 @@ export default function Home({ user, onLogout, onUpdateUser }) {
     setAdvance('');
     setBagsSold('');
     setPriceSold('');
-    fetchBills(billdate);
+    setViewDate(billdate);
   };
 
   const totalBagsToday = bills.reduce((acc, b) => acc + (Number(b.no_of_bags) || 0), 0);
@@ -419,9 +420,20 @@ export default function Home({ user, onLogout, onUpdateUser }) {
         
         {/* Bills On This Day Table (Responsive Scrollable) */}
         <div style={{ backgroundColor: '#ffffff', borderRadius: '10px', padding: '16px', boxShadow: '0 2px 8px rgba(0,0,0,0.08)', border: '1px solid #8ce86a' }}>
-          <h2 align="center" style={{ color: '#15803d', margin: '0 0 16px 0', fontSize: '1.3rem', fontWeight: 'bold' }}>
-            - Bills On This Day ({billdate}) -
-          </h2>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', flexWrap: 'wrap', gap: '12px', marginBottom: '16px' }}>
+            <h2 style={{ color: '#15803d', margin: 0, fontSize: '1.3rem', fontWeight: 'bold', textAlign: 'center' }}>
+              - Bills On This Day ({viewDate}) -
+            </h2>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <label style={{ fontSize: '13px', fontWeight: 'bold', color: '#475569' }}>📅 View Date:</label>
+              <input
+                type="date"
+                value={viewDate}
+                onChange={(e) => setViewDate(e.target.value)}
+                style={{ border: '2px solid #15803d', padding: '5px 8px', borderRadius: '6px', fontSize: '14px', cursor: 'pointer', color: '#0f172a', backgroundColor: '#f0fdf4' }}
+              />
+            </div>
+          </div>
 
           <div style={{ overflowX: 'auto' }}>
             {bills.length === 0 ? (
