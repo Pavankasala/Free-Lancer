@@ -6,18 +6,27 @@ import BillModal from '../components/BillModal';
 import UserProfileModal from '../components/UserProfileModal';
 import { API_BASE_URL } from '../api/config';
 
+// Returns today's date in local timezone as YYYY-MM-DD
+function localToday() {
+  const d = new Date();
+  const yyyy = d.getFullYear();
+  const mm = String(d.getMonth() + 1).padStart(2, '0');
+  const dd = String(d.getDate()).padStart(2, '0');
+  return `${yyyy}-${mm}-${dd}`;
+}
+
 export default function Home({ user, onLogout, onUpdateUser }) {
   const [isProfileModalOpen, setIsProfileModalOpen] = useState(() => {
     const hasBeenShown = localStorage.getItem('agri_profile_modal_shown');
     if (hasBeenShown === 'true') return false;
     return user && (!user.address || !user.phone || !user.business_name);
   });
-  const [billdate, setBilldate] = useState(new Date().toISOString().split('T')[0]);
+  const [billdate, setBilldate] = useState(localToday());
   const [name, setName] = useState('');
   const [channels, setChannels] = useState([{ bags: '', price: '' }]);
   const [hamali, setHamali] = useState(user?.default_hamali || 0);
   const [advance, setAdvance] = useState('');
-  const [advanceDate, setAdvanceDate] = useState(new Date().toISOString().split('T')[0]);
+  const [advanceDate, setAdvanceDate] = useState(localToday());
   const [advanceTime, setAdvanceTime] = useState(() => {
     const now = new Date();
     let h = now.getHours();
@@ -29,6 +38,7 @@ export default function Home({ user, onLogout, onUpdateUser }) {
   const [bagsSold, setBagsSold] = useState('');
   const [priceSold, setPriceSold] = useState('');
   const [bills, setBills] = useState([]);
+  const [tableDate, setTableDate] = useState(localToday());
   const [selectedBill, setSelectedBill] = useState(null);
   const [confirmDeleteId, setConfirmDeleteId] = useState(null);
   const [editingBillId, setEditingBillId] = useState(null);
@@ -78,6 +88,11 @@ export default function Home({ user, onLogout, onUpdateUser }) {
   useEffect(() => {
     fetchBills(billdate);
   }, [billdate]);
+
+  // Separate effect: re-fetch when user picks a different date in the table filter
+  useEffect(() => {
+    fetchBills(tableDate);
+  }, [tableDate]);
 
 
   const handleEditClick = (b) => {
@@ -420,7 +435,13 @@ export default function Home({ user, onLogout, onUpdateUser }) {
         {/* Bills On This Day Table (Responsive Scrollable) */}
         <div style={{ backgroundColor: '#ffffff', borderRadius: '10px', padding: '16px', boxShadow: '0 2px 8px rgba(0,0,0,0.08)', border: '1px solid #8ce86a' }}>
           <h2 align="center" style={{ color: '#15803d', margin: '0 0 16px 0', fontSize: '1.3rem', fontWeight: 'bold' }}>
-            - Bills On This Day ({billdate}) -
+            - Bills On This Day ({tableDate}) -&nbsp;
+            <input
+              type="date"
+              value={tableDate}
+              onChange={(e) => setTableDate(e.target.value)}
+              style={{ border: '2px solid #15803d', padding: '3px 7px', borderRadius: '6px', fontSize: '14px', cursor: 'pointer', backgroundColor: '#f0fdf4', color: '#0f172a', verticalAlign: 'middle' }}
+            />
           </h2>
 
           <div style={{ overflowX: 'auto' }}>
