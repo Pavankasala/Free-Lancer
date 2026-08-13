@@ -212,6 +212,109 @@ class AgriCommissionManagerTestCase(unittest.TestCase):
         self.assertEqual(original_user_id, linked_user_id)
         self.assertEqual(google_data['user']['email'], test_email.lower())
 
+    def test_11_hamali_per_bag_calculation_90_bags(self):
+        """Test hamali deduction: 90 bags * ₹5 hamali = ₹450 deduction, not ₹5"""
+        # Create a bill: 90 bags @ ₹100/bag = ₹9,000 gross
+        # Hamali: ₹5 per bag = ₹450 total deduction
+        # Commission: 4% of ₹9,000 = ₹360
+        # Damage: 6% of ₹9,000 = ₹540
+        # Net = 9000 - 360 - 450 - 540 = ₹7,650
+        payload = {
+            'name': 'Hamali Test Kisan',
+            'billdate': '2026-08-13',
+            'no_of_bags': 90,
+            'price': 100,
+            'hamali': 5,
+            'advance': 0
+        }
+        res = self.client.post('/api/add-bill', json=payload, headers=self.auth_headers)
+        data = json.loads(res.data)
+        self.assertEqual(res.status_code, 200)
+        self.assertTrue(data['success'])
+
+        # Fetch the bill and verify net_amount
+        res2 = self.client.get('/api/home-bills?date=2026-08-13', headers=self.auth_headers)
+        data2 = json.loads(res2.data)
+        found = [b for b in data2['bills'] if b['name'] == 'Hamali Test Kisan']
+        self.assertEqual(len(found), 1)
+        
+        bill = found[0]
+        gross = bill['no_of_bags'] * bill['price']  # 90 * 100 = 9000
+        commission = round(gross * 0.04)  # 360
+        hamali_deduction = bill['no_of_bags'] * bill['hamali']  # 90 * 5 = 450
+        damage = round(gross * 0.06)  # 540
+        expected_net = max(0.0, gross - commission - hamali_deduction - damage)  # 7650
+        
+        self.assertEqual(bill['net_amount'], expected_net, 
+            f"Expected net_amount {expected_net}, got {bill['net_amount']}")
+
+    def test_12_hamali_multi_channel_bill(self):
+        """Test hamali for multi-channel bill: 30 bags (2 channels) + 40 bags (2nd channel) at ₹10/bag"""
+        # Total 70 bags @ ₹200/bag = ₹14,000 gross
+        # Hamali: ₹10 per bag = ₹700 total deduction
+        # Commission: 4% of ₹14,000 = ₹560
+        # Damage: 6% of ₹14,000 = ₹840
+        # Net = 14000 - 560 - 700 - 840 = ₹11,900
+        payload = {
+            'name': 'Multi-Channel Kisan',
+            'billdate': '2026-08-13',
+            'items': [
+                {'bags': 30, 'price': 200},
+                {'bags': 40, 'price': 200}
+            ],
+            'hamali': 10,
+            'advance': 0
+        }
+        res = self.client.post('/api/add-bill', json=payload, headers=self.auth_headers)
+        data = json.loads(res.data)
+        self.assertEqual(res.status_code, 200)
+        self.assertTrue(data['success'])
+
+        # Fetch the bill and verify net_amount
+        res2 = self.client.get('/api/home-bills?date=2026-08-13', headers=self.auth_headers)
+        data2 = json.loads(res2.data)
+        found = [b for b in data2['bills'] if b['name'] == 'Multi-Channel Kisan']
+        self.assertEqual(len(found), 1)
+        
+        bill = found[0]
+        gross = bill['no_of_bags'] * bill['price']  # 70 * 200 = 14000
+        commission = round(gross * 0.04)  # 560
+        hamali_deduction = bill['no_of_bags'] * bill['hamali']  # 70 * 10 = 700
+        damage = round(gross * 0.06)  # 840
+        expected_net = max(0.0, gross - commission - hamali_deduction - damage)  # 11900
+        
+        self.assertEqual(bill['net_amount'], expected_net,
+            f"Expected net_amount {expected_net}, got {bill['net_amount']}")
+
+    def test_13_kisan_balance_paid_status(self):
+        """Test PAID/NOT PAID status in Kisan Balance"""
+        # Create two bills: one NOT PAID, one PAID
+        res1 = self.client.post('/api/add-bill', json={
+            'name': 'Status Test Kisan',
+            'billdate': '2026-08-13',
+            'no_of_bags': 50,
+            'price': 100,
+            'hamali': 5,
+            'advance': 0
+        }, headers=self.auth_headers)
+        self.assertEqual(res1.status_code, 200)
+
+        # Get the bill and confirm it to mark as PAID
+        res2 = self.client.get('/api/home-bills?date=2026-08-13', headers=self.auth_headers)
+        data2 = json.loads(res2.data)
+        bill = [b for b in data2['bills'] if b['name'] == 'Status Test Kisan'][0]
+        bill_id = bill['id']
+
+        # Confirm the bill (mark as PAID)
+        res3 = self.client.post(f'/api/confirm-bill/{bill_id}', headers=self.auth_headers)
+        self.assertEqual(res3.status_code, 200)
+
+        # Verify paid status is YES
+        res4 = self.client.get('/api/home-bills?date=2026-08-13', headers=self.auth_headers)
+        data4 = json.loads(res4.data)
+        confirmed_bill = [b for b in data4['bills'] if b['id'] == bill_id][0]
+        self.assertEqual(confirmed_bill['paid'], 'YES')
+
 if __name__ == '__main__':
     unittest.main()
 

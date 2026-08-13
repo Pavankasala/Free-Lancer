@@ -92,12 +92,14 @@ def _group_rows(rows):
         bill = groups[group_key]
         bill["price"] = bill["total_amount"] / bill["no_of_bags"] if bill["no_of_bags"] else 0.0
         gross = bill["total_amount"]
-        hamali_val = float(bill.get("hamali") or 0.0)
+        hamali_per_bag = float(bill.get("hamali") or 0.0)
+        total_bags = int(bill.get("no_of_bags") or 0)
+        hamali_deduction = hamali_per_bag * total_bags
         bill_type = bill.get("type", "")
         if bill_type == "BUY":
             commission_val = round(gross * 0.04)
             damage_val = round(gross * 0.06)
-            bill["net_amount"] = max(0.0, gross - commission_val - hamali_val - damage_val)
+            bill["net_amount"] = max(0.0, gross - commission_val - hamali_deduction - damage_val)
         else:
             # BUYER: no deductions, net = gross
             bill["net_amount"] = gross

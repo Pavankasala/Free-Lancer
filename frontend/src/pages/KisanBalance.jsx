@@ -1,8 +1,8 @@
-import React, { useState, useEffect } from 'react';
 import axios from 'axios';
-import Header from '../components/Header';
-import BillModal from '../components/BillModal';
+import { useEffect, useState } from 'react';
 import { API_BASE_URL } from '../api/config';
+import BillModal from '../components/BillModal';
+import Header from '../components/Header';
 
 export default function KisanBalance({ user, onLogout }) {
   const [selectedYear, setSelectedYear] = useState('2026');
@@ -102,6 +102,7 @@ export default function KisanBalance({ user, onLogout }) {
                     <th style={{ padding: '8px', textAlign: 'right' }}>Net Amount (₹)</th>
                     <th style={{ padding: '8px', textAlign: 'right' }}>Advance Paid (₹)</th>
                     <th style={{ padding: '8px', textAlign: 'right' }}>Remaining Balance (₹)</th>
+                    <th style={{ padding: '8px', textAlign: 'center' }}>Status</th>
                     <th style={{ padding: '8px', textAlign: 'center' }}>Action</th>
                   </tr>
                 </thead>
@@ -118,6 +119,7 @@ export default function KisanBalance({ user, onLogout }) {
                       const net_amount = Number(b.net_amount) || 0;
                       const advance = Number(b.advance) || 0;
                       const net = net_amount - advance;
+                      const isPaid = b.paid === 'YES';
                       return (
                         <tr key={b.id || idx} style={{ borderBottom: '1px solid #e2e8f0', backgroundColor: idx % 2 === 0 ? '#ffffff' : '#f8fafc' }}>
                           <td style={{ padding: '8px' }}>{idx + 1}</td>
@@ -126,6 +128,7 @@ export default function KisanBalance({ user, onLogout }) {
                           <td style={{ padding: '8px', textAlign: 'right' }}>₹{net_amount.toLocaleString()}</td>
                           <td style={{ padding: '8px', textAlign: 'right', color: '#dc2626' }}>₹{advance.toLocaleString()}</td>
                           <td style={{ padding: '8px', textAlign: 'right', fontWeight: 'bold', color: net >= 0 ? '#16a34a' : '#dc2626' }}>₹{net.toLocaleString()}</td>
+                          <td style={{ padding: '8px', textAlign: 'center', fontWeight: 'bold', color: isPaid ? '#16a34a' : '#dc2626' }}>{isPaid ? 'PAID' : 'NOT PAID'}</td>
                           <td style={{ padding: '8px', textAlign: 'center' }}>
                             <button
                               type="button"
