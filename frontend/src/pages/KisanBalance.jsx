@@ -10,6 +10,8 @@ export default function KisanBalance({ user, onLogout }) {
   const [balanceData, setBalanceData] = useState([]);
   const [searched, setSearched] = useState(false);
   const [selectedBill, setSelectedBill] = useState(null);
+  // Track which bill id is currently being marked paid to show feedback
+  const [markingPaidId, setMarkingPaidId] = useState(null);
 
   const years = [];
   for (let y = 2017; y <= 2060; y++) {
@@ -20,7 +22,9 @@ export default function KisanBalance({ user, onLogout }) {
     try {
       const params = new URLSearchParams({ year: selectedYear });
       if (kisanName) params.set('name', kisanName);
-      const res = await axios.get(`${API_BASE_URL}/api/kisan-balance?${params}`);
+      const token = localStorage.getItem('token');
+      const headers = token ? { Authorization: `Bearer ${token}` } : {};
+      const res = await axios.get(`${API_BASE_URL}/api/kisan-balance?${params}`, { headers });
       if (res.data && res.data.success) {
         setBalanceData(res.data.records || []);
       }
@@ -33,6 +37,42 @@ export default function KisanBalance({ user, onLogout }) {
   useEffect(() => {
     handleGetBalance();
   }, [selectedYear]);
+
+  // Double-click handler: mark this individual bill as PAID via the existing
+  // /api/mark-bill-paid/<id> endpoint, then refresh the balance table.
+  // The backend UPDATE is idempotent — calling it repeatedly on an already-paid
+  // bill simply sets paid='YES' again without creating duplicates or side-effects.
+  const handleDoubleClickMarkPaid = async (bill) => {
+    if (bill.paid === 'YES') return; // already paid — nothing to do
+    const billId = bill.id;
+    if (!billId) return;
+
+    setMarkingPaidId(billId);
+    try {
+      const token = localStorage.getItem('token');
+      const headers = token ? { Authorization: `Bearer ${token}` } : {};
+      const res = await axios.post(
+        `${API_BASE_URL}/api/mark-bill-paid/${billId}`,
+        { paid: 'YES' },
+        { headers }
+      );
+      if (res.data && res.data.success) {
+        // Re-fetch so pending_balance and TOTAL BALANCE reflect the change
+        await handleGetBalance();
+      }
+    } catch (e) {
+      console.error('Failed to mark bill paid:', e);
+    } finally {
+      setMarkingPaidId(null);
+    }
+  };
+
+  // Total balance = sum of backend-computed pending_balance values.
+  // This uses the same field the individual rows display, so they stay in sync.
+  const totalPendingBalance = balanceData.reduce(
+    (acc, b) => acc + Number(b.pending_balance ?? 0),
+    0
+  );
 
   return (
     <div style={{ fontFamily: "'Times New Roman', Times, serif", backgroundColor: '#f8fafc', minHeight: '100vh' }}>
@@ -83,9 +123,23 @@ export default function KisanBalance({ user, onLogout }) {
         {/* Balance Report Table Card */}
         {searched && (
           <div style={{ backgroundColor: '#ffffff', borderRadius: '10px', padding: '16px', boxShadow: '0 2px 8px rgba(0,0,0,0.08)', border: '1px solid #8ce86a' }}>
-            <h2 align="center" style={{ color: '#15803d', margin: '0 0 16px 0', fontSize: '1.3rem', fontWeight: 'bold' }}>
-              - Kisan Ledger & Balance ({selectedYear}) -
-            </h2>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', flexWrap: 'wrap', gap: '8px' }}>
+              <h2 style={{ color: '#15803d', margin: 0, fontSize: '1.3rem', fontWeight: 'bold' }}>
+                - Kisan Ledger & Balance ({selectedYear}) -
+              </h2>
+
+              {/* TOTAL BALANCE — sum of all pending_balance values from the backend */}
+              {balanceData.length > 0 && (
+                <div style={{ backgroundColor: totalPendingBalance === 0 ? '#f0fdf4' : '#fef2f2', border: `1px solid ${totalPendingBalance === 0 ? '#bbf7d0' : '#fca5a5'}`, borderRadius: '8px', padding: '8px 16px', textAlign: 'center' }}>
+                  <div style={{ fontSize: '12px', fontWeight: 'bold', color: totalPendingBalance === 0 ? '#166534' : '#991b1b', marginBottom: '2px' }}>
+                    TOTAL BALANCE
+                  </div>
+                  <div style={{ fontSize: '1.3rem', fontWeight: 'bold', color: totalPendingBalance === 0 ? '#15803d' : '#dc2626' }}>
+                    ₹{totalPendingBalance.toLocaleString()}
+                  </div>
+                </div>
+              )}
+            </div>
 
             <div style={{ overflowX: 'auto' }}>
               <table width="100%" style={{ borderCollapse: 'collapse', minWidth: '600px' }}>
@@ -104,19 +158,20 @@ export default function KisanBalance({ user, onLogout }) {
                 <tbody>
                   {balanceData.length === 0 ? (
                     <tr>
-                      <td colSpan="7" align="center" style={{ padding: '16px', color: '#dc2626', fontWeight: 'bold' }}>
+                      <td colSpan="8" align="center" style={{ padding: '16px', color: '#dc2626', fontWeight: 'bold' }}>
                         No Kisan ledger records found for {selectedYear}.
                       </td>
                     </tr>
                   ) : (
                     balanceData.map((b, idx) => {
-                      const gross     = Number(b.total_amount || 0);
-                      const net_amount = Number(b.net_amount  || 0);
-                      const advance   = Number(b.advance      || 0);
-                      // Use the backend-computed pending_balance (already floored at 0 and
-                      // paid-flag-aware).  Fall back only if the field is absent.
-                      const pending   = Number(b.pending_balance ?? Math.max(0, net_amount - advance));
-                      const isPaid    = b.paid === 'YES';
+                      const gross      = Number(b.total_amount   || 0);
+                      const net_amount = Number(b.net_amount     || 0);
+                      const advance    = Number(b.advance        || 0);
+                      // pending_balance is backend-computed: max(0, net − advance), 0 if paid
+                      const pending    = Number(b.pending_balance ?? Math.max(0, net_amount - advance));
+                      const isPaid     = b.paid === 'YES';
+                      const isMarking  = markingPaidId === b.id;
+
                       return (
                         <tr key={b.id || idx} style={{ borderBottom: '1px solid #e2e8f0', backgroundColor: idx % 2 === 0 ? '#ffffff' : '#f8fafc' }}>
                           <td style={{ padding: '8px' }}>{idx + 1}</td>
@@ -129,15 +184,43 @@ export default function KisanBalance({ user, onLogout }) {
                           <td style={{ padding: '8px', textAlign: 'center' }}>
                             <button
                               type="button"
+                              // Single click → open invoice/print modal (existing behavior)
                               onClick={() => setSelectedBill(b)}
-                              style={{ backgroundColor: '#2563eb', color: '#ffffff', border: 'none', borderRadius: '4px', padding: '4px 10px', cursor: 'pointer', fontSize: '12px', fontWeight: 'bold' }}
+                              // Double click → mark this bill as PAID in the backend
+                              onDoubleClick={() => handleDoubleClickMarkPaid(b)}
+                              disabled={isMarking}
+                              title={isPaid ? 'Bill already paid' : 'Click to print · Double-click to mark as PAID'}
+                              style={{
+                                backgroundColor: isMarking ? '#64748b' : (isPaid ? '#16a34a' : '#2563eb'),
+                                color: '#ffffff',
+                                border: 'none',
+                                borderRadius: '4px',
+                                padding: '4px 10px',
+                                cursor: isMarking ? 'wait' : 'pointer',
+                                fontSize: '12px',
+                                fontWeight: 'bold',
+                                transition: 'background-color 0.15s',
+                              }}
                             >
-                              🖨️ Print Bill
+                              {isMarking ? '⏳ Saving…' : (isPaid ? '✅ Print Bill' : '🖨️ Print Bill')}
                             </button>
                           </td>
                         </tr>
                       );
                     })
+                  )}
+
+                  {/* TOTAL BALANCE footer row */}
+                  {balanceData.length > 0 && (
+                    <tr style={{ backgroundColor: '#f0fdf4', fontWeight: 'bold', borderTop: '2px solid #15803d' }}>
+                      <td colSpan="5" align="right" style={{ padding: '10px', color: '#15803d' }}>
+                        TOTAL BALANCE:
+                      </td>
+                      <td align="right" style={{ padding: '10px', color: totalPendingBalance === 0 ? '#15803d' : '#dc2626', fontSize: '1.05rem' }}>
+                        ₹{totalPendingBalance.toLocaleString()}
+                      </td>
+                      <td colSpan="2" />
+                    </tr>
                   )}
                 </tbody>
               </table>

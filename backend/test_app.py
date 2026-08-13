@@ -636,6 +636,113 @@ class AgriCommissionManagerTestCase(unittest.TestCase):
         self.assertAlmostEqual(r['pending_balance'], 0.0, places=2)
         self.assertEqual(r['paid'], 'YES')
 
+    # ------------------------------------------------------------------
+    # Tests 26-30: Double-click mark-paid and TOTAL BALANCE behaviour
+    # ------------------------------------------------------------------
+
+    def test_26_mark_bill_paid_via_api_sets_paid_yes(self):
+        """POST /api/mark-bill-paid/<id> with paid=YES marks the bill paid."""
+        self._add_buy_bill('MP_Basic', 50, 100, 5, advance=0)
+        res = self.client.get('/api/home-bills?date=2025-01-15', headers=self.auth_headers)
+        bill = next(b for b in json.loads(res.data)['bills'] if b['name'] == 'MP_Basic')
+        self.assertEqual(bill['paid'], 'NO')
+
+        res2 = self.client.post(
+            f'/api/mark-bill-paid/{bill["id"]}',
+            json={'paid': 'YES'},
+            headers=self.auth_headers,
+        )
+        self.assertEqual(res2.status_code, 200)
+        self.assertTrue(json.loads(res2.data)['success'])
+
+        # Verify through kisan-balance endpoint (the one the UI uses)
+        data = self._kisan_balance('MP_Basic')
+        r = data['records'][0]
+        self.assertEqual(r['paid'], 'YES')
+        self.assertAlmostEqual(r['pending_balance'], 0.0, places=2)
+
+    def test_27_mark_bill_paid_is_idempotent(self):
+        """Calling mark-bill-paid repeatedly never corrupts the record."""
+        self._add_buy_bill('MP_Idempotent', 50, 100, 5, advance=0)
+        res = self.client.get('/api/home-bills?date=2025-01-15', headers=self.auth_headers)
+        bill = next(b for b in json.loads(res.data)['bills'] if b['name'] == 'MP_Idempotent')
+        bill_id = bill['id']
+
+        # Call three times
+        for _ in range(3):
+            r = self.client.post(
+                f'/api/mark-bill-paid/{bill_id}',
+                json={'paid': 'YES'},
+                headers=self.auth_headers,
+            )
+            self.assertEqual(r.status_code, 200)
+
+        data = self._kisan_balance('MP_Idempotent')
+        r = data['records'][0]
+        self.assertEqual(r['paid'], 'YES')
+        self.assertAlmostEqual(r['pending_balance'], 0.0, places=2)
+
+    def test_28_mark_bill_paid_updates_total_balance(self):
+        """After marking one bill paid, TOTAL BALANCE decreases by that bill's pending_balance."""
+        bags, price, hamali = 100, 50, 5
+        net = self._expected_net(bags, price, hamali)
+
+        # Two unpaid bills for the same kisan name on different dates
+        self._add_buy_bill('MB_Total', bags, price, hamali, advance=0, date='2025-03-01')
+        self._add_buy_bill('MB_Total', bags, price, hamali, advance=0, date='2025-03-02')
+
+        # Both unpaid → total balance = 2 × net
+        data_before = self._kisan_balance('MB_Total')
+        self.assertEqual(len(data_before['records']), 2)
+        total_before = sum(r['pending_balance'] for r in data_before['records'])
+        self.assertAlmostEqual(total_before, net * 2, places=2)
+
+        # Mark the first bill paid
+        first_id = data_before['records'][0]['id']
+        res = self.client.post(
+            f'/api/mark-bill-paid/{first_id}',
+            json={'paid': 'YES'},
+            headers=self.auth_headers,
+        )
+        self.assertEqual(res.status_code, 200)
+
+        # Re-fetch — total balance should now equal net (only the second bill)
+        data_after = self._kisan_balance('MB_Total')
+        total_after = sum(r['pending_balance'] for r in data_after['records'])
+        self.assertAlmostEqual(total_after, net, places=2,
+            msg='TOTAL BALANCE must decrease by the paid bill\'s pending_balance')
+
+    def test_29_mark_bill_paid_unknown_id_returns_404(self):
+        """Marking a non-existent bill returns 404 and does not crash."""
+        res = self.client.post(
+            '/api/mark-bill-paid/999999',
+            json={'paid': 'YES'},
+            headers=self.auth_headers,
+        )
+        self.assertEqual(res.status_code, 404)
+        self.assertFalse(json.loads(res.data)['success'])
+
+    def test_30_total_balance_zero_when_all_bills_paid(self):
+        """When every bill is paid, TOTAL BALANCE = 0."""
+        bags, price, hamali = 60, 80, 4
+        net = self._expected_net(bags, price, hamali)
+
+        self._add_buy_bill('TB_Zero', bags, price, hamali, advance=0, date='2025-04-01')
+        self._add_buy_bill('TB_Zero', bags, price, hamali, advance=0, date='2025-04-02')
+
+        data = self._kisan_balance('TB_Zero')
+        for record in data['records']:
+            self.client.post(
+                f'/api/mark-bill-paid/{record["id"]}',
+                json={'paid': 'YES'},
+                headers=self.auth_headers,
+            )
+
+        data_after = self._kisan_balance('TB_Zero')
+        total = sum(r['pending_balance'] for r in data_after['records'])
+        self.assertAlmostEqual(total, 0.0, places=2,
+            msg='TOTAL BALANCE must be 0 when all bills are paid')
+
 
 if __name__ == '__main__':
     unittest.main()
