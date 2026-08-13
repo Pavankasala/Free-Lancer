@@ -418,6 +418,225 @@ class AgriCommissionManagerTestCase(unittest.TestCase):
         self.assertEqual(hamali_deduction_for_invoice, 180,
             f"Invoice hamali deduction should be 180 (18 bags × ₹10), not {hamali_deduction_for_invoice}")
 
+    # ------------------------------------------------------------------
+    # Tests 16-25: Remaining Balance — kisan-balance and buyer-balance
+    # ------------------------------------------------------------------
+
+    def _add_buy_bill(self, name, bags, price, hamali, advance, date='2025-01-15'):
+        """Helper: create a BUY bill and return the grouped bill object."""
+        res = self.client.post('/api/add-bill', json={
+            'name': name,
+            'billdate': date,
+            'no_of_bags': bags,
+            'price': price,
+            'hamali': hamali,
+            'advance': advance,
+        }, headers=self.auth_headers)
+        self.assertEqual(res.status_code, 200, res.data)
+        return json.loads(res.data)
+
+    def _add_buyer_bill(self, name, bags, price, advance, date='2025-01-15'):
+        """Helper: create a BUYER bill and return response data."""
+        res = self.client.post('/api/add-buyer-bill', json={
+            'name': name,
+            'billdate': date,
+            'items': [{'bags': bags, 'price': price}],
+            'advance': advance,
+        }, headers=self.auth_headers)
+        self.assertEqual(res.status_code, 200, res.data)
+        return json.loads(res.data)
+
+    def _kisan_balance(self, name, year='2025'):
+        res = self.client.get(
+            f'/api/kisan-balance?name={name}&year={year}',
+            headers=self.auth_headers,
+        )
+        self.assertEqual(res.status_code, 200)
+        data = json.loads(res.data)
+        self.assertTrue(data['success'])
+        return data
+
+    def _buyer_balance(self, name, year='2025'):
+        res = self.client.get(
+            f'/api/buyer-balance?name={name}&year={year}',
+            headers=self.auth_headers,
+        )
+        self.assertEqual(res.status_code, 200)
+        data = json.loads(res.data)
+        self.assertTrue(data['success'])
+        return data
+
+    # ---- helpers for expected values ----
+    @staticmethod
+    def _expected_net(bags, price, hamali_per_bag):
+        gross = bags * price
+        commission = round(gross * 0.04)
+        damage = round(gross * 0.06)
+        hamali = hamali_per_bag * bags
+        return max(0.0, gross - commission - damage - hamali)
+
+    # ---- kisan balance tests ----
+
+    def test_16_kisan_balance_unpaid_no_advance(self):
+        """Unpaid bill, zero advance → pending = net_amount, remaining > 0."""
+        bags, price, hamali = 100, 50, 5
+        expected_net = self._expected_net(bags, price, hamali)
+        self._add_buy_bill('KB_Unpaid', bags, price, hamali, advance=0)
+
+        data = self._kisan_balance('KB_Unpaid')
+        records = data['records']
+        self.assertEqual(len(records), 1)
+        r = records[0]
+
+        self.assertAlmostEqual(r['net_amount'], expected_net, places=2)
+        self.assertAlmostEqual(r['pending_balance'], expected_net, places=2,
+            msg='pending_balance must equal net_amount when advance=0')
+        self.assertEqual(r['paid'], 'NO')
+        self.assertAlmostEqual(data['summary']['pending_balance'], expected_net, places=2)
+
+    def test_17_kisan_balance_partially_paid(self):
+        """Partial advance → pending = net_amount − advance, remaining > 0."""
+        bags, price, hamali = 100, 50, 5
+        expected_net = self._expected_net(bags, price, hamali)
+        advance = expected_net / 2          # pay exactly half
+        self._add_buy_bill('KB_Partial', bags, price, hamali, advance=advance)
+
+        data = self._kisan_balance('KB_Partial')
+        r = data['records'][0]
+
+        self.assertAlmostEqual(r['net_amount'], expected_net, places=2)
+        self.assertAlmostEqual(r['advance'], advance, places=2)
+        expected_pending = expected_net - advance
+        self.assertAlmostEqual(r['pending_balance'], expected_pending, places=2,
+            msg='pending_balance must be net − advance for partial payment')
+        self.assertEqual(r['paid'], 'NO')
+
+    def test_18_kisan_balance_fully_paid_via_advance(self):
+        """Advance >= net_amount → pending = 0, paid = YES."""
+        bags, price, hamali = 100, 50, 5
+        expected_net = self._expected_net(bags, price, hamali)
+        self._add_buy_bill('KB_FullAdvance', bags, price, hamali, advance=expected_net)
+
+        data = self._kisan_balance('KB_FullAdvance')
+        r = data['records'][0]
+
+        self.assertAlmostEqual(r['net_amount'], expected_net, places=2)
+        self.assertAlmostEqual(r['pending_balance'], 0.0, places=2,
+            msg='pending_balance must be 0 when advance >= net_amount')
+        self.assertEqual(r['paid'], 'YES')
+        self.assertAlmostEqual(data['summary']['pending_balance'], 0.0, places=2)
+
+    def test_19_kisan_balance_over_paid_no_negative(self):
+        """Advance > net_amount (over-paid) → pending = 0, NOT negative."""
+        bags, price, hamali = 100, 50, 5
+        expected_net = self._expected_net(bags, price, hamali)
+        over_advance = expected_net + 500   # pay ₹500 more than owed
+        self._add_buy_bill('KB_OverPaid', bags, price, hamali, advance=over_advance)
+
+        data = self._kisan_balance('KB_OverPaid')
+        r = data['records'][0]
+
+        self.assertGreaterEqual(r['pending_balance'], 0.0,
+            msg='pending_balance must never be negative (over-payment)')
+        self.assertAlmostEqual(r['pending_balance'], 0.0, places=2)
+        self.assertEqual(r['paid'], 'YES')
+
+    def test_20_kisan_balance_manually_marked_paid_zero_advance(self):
+        """Bill manually marked paid (no advance) → pending = 0, status = YES."""
+        self._add_buy_bill('KB_ManualPaid', 100, 50, 5, advance=0)
+
+        # fetch the bill id
+        res = self.client.get('/api/home-bills?date=2025-01-15', headers=self.auth_headers)
+        bills = json.loads(res.data)['bills']
+        bill = next(b for b in bills if b['name'] == 'KB_ManualPaid')
+
+        # manually mark paid
+        res2 = self.client.post(f'/api/mark-bill-paid/{bill["id"]}',
+                                json={'paid': 'YES'}, headers=self.auth_headers)
+        self.assertEqual(res2.status_code, 200)
+
+        data = self._kisan_balance('KB_ManualPaid')
+        r = data['records'][0]
+
+        self.assertAlmostEqual(r['pending_balance'], 0.0, places=2,
+            msg='pending_balance must be 0 when bill is manually marked paid')
+        self.assertEqual(r['paid'], 'YES')
+
+    def test_21_kisan_balance_summary_aggregates_multiple_bills(self):
+        """Summary totals aggregate correctly across multiple bills."""
+        bags, price, hamali = 50, 100, 10
+        net = self._expected_net(bags, price, hamali)
+
+        # Bill A: unpaid, Bill B: fully paid
+        self._add_buy_bill('KB_SumTest', bags, price, hamali, advance=0,    date='2025-02-01')
+        self._add_buy_bill('KB_SumTest', bags, price, hamali, advance=net,  date='2025-02-02')
+
+        data = self._kisan_balance('KB_SumTest')
+        self.assertEqual(len(data['records']), 2)
+
+        summary = data['summary']
+        self.assertAlmostEqual(summary['net_amount'], net * 2, places=2)
+        # Only the unpaid bill contributes to pending
+        self.assertAlmostEqual(summary['pending_balance'], net, places=2,
+            msg='Summary pending should only include the unpaid bill')
+
+    # ---- buyer balance tests ----
+
+    def test_22_buyer_balance_unpaid_no_advance(self):
+        """Buyer bill, no advance → pending = gross (no deductions for BUYER)."""
+        bags, price = 80, 200
+        gross = bags * price
+        self._add_buyer_bill('BB_Unpaid', bags, price, advance=0)
+
+        data = self._buyer_balance('BB_Unpaid')
+        r = data['records'][0]
+
+        self.assertAlmostEqual(r['net_amount'], gross, places=2,
+            msg='BUYER net_amount = gross (no deductions)')
+        self.assertAlmostEqual(r['pending_balance'], gross, places=2,
+            msg='pending_balance = gross when advance=0')
+        self.assertEqual(r['paid'], 'NO')
+
+    def test_23_buyer_balance_partially_paid(self):
+        """Buyer partial advance → pending = gross − advance."""
+        bags, price = 80, 200
+        gross = bags * price
+        advance = gross / 2
+        self._add_buyer_bill('BB_Partial', bags, price, advance=advance)
+
+        data = self._buyer_balance('BB_Partial')
+        r = data['records'][0]
+
+        self.assertAlmostEqual(r['pending_balance'], gross - advance, places=2)
+        self.assertEqual(r['paid'], 'NO')
+
+    def test_24_buyer_balance_fully_paid(self):
+        """Buyer advance >= gross → pending = 0, paid = YES."""
+        bags, price = 80, 200
+        gross = bags * price
+        self._add_buyer_bill('BB_FullPaid', bags, price, advance=gross)
+
+        data = self._buyer_balance('BB_FullPaid')
+        r = data['records'][0]
+
+        self.assertAlmostEqual(r['pending_balance'], 0.0, places=2)
+        self.assertEqual(r['paid'], 'YES')
+
+    def test_25_buyer_balance_over_paid_no_negative(self):
+        """Buyer over-paid → pending = 0, NOT negative."""
+        bags, price = 80, 200
+        gross = bags * price
+        self._add_buyer_bill('BB_OverPaid', bags, price, advance=gross + 1000)
+
+        data = self._buyer_balance('BB_OverPaid')
+        r = data['records'][0]
+
+        self.assertGreaterEqual(r['pending_balance'], 0.0,
+            msg='Buyer pending_balance must never be negative')
+        self.assertAlmostEqual(r['pending_balance'], 0.0, places=2)
+        self.assertEqual(r['paid'], 'YES')
+
+
 if __name__ == '__main__':
     unittest.main()
 

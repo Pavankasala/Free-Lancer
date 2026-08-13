@@ -1,8 +1,8 @@
-import React, { useState, useEffect } from 'react';
 import axios from 'axios';
-import Header from '../components/Header';
-import BillModal from '../components/BillModal';
+import { useEffect, useState } from 'react';
 import { API_BASE_URL } from '../api/config';
+import BillModal from '../components/BillModal';
+import Header from '../components/Header';
 
 export default function BuyerBalance({ user, onLogout }) {
   const [selectedYear, setSelectedYear] = useState('2026');
@@ -23,21 +23,14 @@ export default function BuyerBalance({ user, onLogout }) {
 
   const handleGetBalance = async () => {
     try {
-      const res = await axios.get(`${API_BASE_URL}/api/buyer-bills`);
+      const params = new URLSearchParams({ year: selectedYear });
+      if (buyerName) params.set('name', buyerName);
+      const res = await axios.get(`${API_BASE_URL}/api/buyer-balance?${params}`);
       if (res.data && res.data.success) {
-        const apiBills = res.data.bills || [];
-        const names = apiBills.map(b => b.name || b.buyerName).filter(Boolean);
+        const records = res.data.records || [];
+        setBalanceData(records);
+        const names = records.map(b => b.name).filter(Boolean);
         setBuyerOptions(Array.from(new Set(names)));
-
-        const filtered = apiBills.filter(b => {
-          const nameStr = b.name || b.buyerName || '';
-          const matchesName = !buyerName || nameStr.toLowerCase().includes(buyerName.toLowerCase());
-          const bDate = b.date || b.billdate || '';
-          const matchesYear = !selectedYear || bDate.startsWith(selectedYear);
-          return matchesName && matchesYear;
-        });
-
-        setBalanceData(filtered);
       }
     } catch (err) {
       setBalanceData([]);
@@ -45,9 +38,10 @@ export default function BuyerBalance({ user, onLogout }) {
     setSearched(true);
   };
 
-  const totalAmountSum = balanceData.reduce((acc, b) => acc + (Number(b.no_of_bags || 0) * Number(b.price || 0)), 0);
-  const totalPaidSum = balanceData.reduce((acc, b) => acc + (b.paid === 'YES' ? (Number(b.no_of_bags || 0) * Number(b.price || 0)) : Number(b.advance || 0)), 0);
-  const totalPendingSum = totalAmountSum - totalPaidSum;
+  // Use the backend-computed fields from /api/buyer-balance — no local recalculation.
+  const totalAmountSum  = balanceData.reduce((acc, b) => acc + Number(b.total_amount    || 0), 0);
+  const totalPaidSum    = balanceData.reduce((acc, b) => acc + Number(b.cash_paid       || 0), 0);
+  const totalPendingSum = balanceData.reduce((acc, b) => acc + Number(b.pending_balance || 0), 0);
 
   return (
     <div style={{ fontFamily: "'Times New Roman', Times, serif", backgroundColor: '#f8fafc', minHeight: '100vh' }}>
@@ -131,9 +125,11 @@ export default function BuyerBalance({ user, onLogout }) {
                     </tr>
                   ) : (
                     balanceData.map((b, idx) => {
-                      const total = Number(b.no_of_bags || 0) * Number(b.price || 0);
-                      const paid = b.paid === 'YES' ? total : Number(b.advance || 0);
-                      const pending = total - paid;
+                      const total   = Number(b.total_amount    || 0);
+                      // cash_paid: amount actually paid (net if fully paid, else advance)
+                      const paid    = Number(b.cash_paid       ?? (b.paid === 'YES' ? total : (b.advance || 0)));
+                      // pending_balance already computed by backend: max(0, net − advance) or 0 if paid
+                      const pending = Number(b.pending_balance ?? Math.max(0, total - paid));
                       return (
                         <tr key={b.id || idx} style={{ borderBottom: '1px solid #e2e8f0', backgroundColor: idx % 2 === 0 ? '#ffffff' : '#f8fafc' }}>
                           <td style={{ padding: '8px' }}>{idx + 1}</td>

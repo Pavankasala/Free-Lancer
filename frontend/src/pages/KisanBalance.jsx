@@ -18,16 +18,11 @@ export default function KisanBalance({ user, onLogout }) {
 
   const handleGetBalance = async () => {
     try {
-      const res = await axios.get(`${API_BASE_URL}/api/home-bills`);
+      const params = new URLSearchParams({ year: selectedYear });
+      if (kisanName) params.set('name', kisanName);
+      const res = await axios.get(`${API_BASE_URL}/api/kisan-balance?${params}`);
       if (res.data && res.data.success) {
-        const allBills = res.data.bills || [];
-        const filtered = allBills.filter(b => {
-          const matchesName = !kisanName || (b.name || '').toLowerCase().includes(kisanName.toLowerCase());
-          const bDate = b.date || b.billdate || '';
-          const matchesYear = !selectedYear || bDate.startsWith(selectedYear);
-          return matchesName && matchesYear;
-        });
-        setBalanceData(filtered);
+        setBalanceData(res.data.records || []);
       }
     } catch (e) {
       setBalanceData([]);
@@ -115,19 +110,21 @@ export default function KisanBalance({ user, onLogout }) {
                     </tr>
                   ) : (
                     balanceData.map((b, idx) => {
-                      const total = Number(b.no_of_bags) * Number(b.price) || 0;
-                      const net_amount = Number(b.net_amount) || 0;
-                      const advance = Number(b.advance) || 0;
-                      const net = net_amount - advance;
-                      const isPaid = b.paid === 'YES';
+                      const gross     = Number(b.total_amount || 0);
+                      const net_amount = Number(b.net_amount  || 0);
+                      const advance   = Number(b.advance      || 0);
+                      // Use the backend-computed pending_balance (already floored at 0 and
+                      // paid-flag-aware).  Fall back only if the field is absent.
+                      const pending   = Number(b.pending_balance ?? Math.max(0, net_amount - advance));
+                      const isPaid    = b.paid === 'YES';
                       return (
                         <tr key={b.id || idx} style={{ borderBottom: '1px solid #e2e8f0', backgroundColor: idx % 2 === 0 ? '#ffffff' : '#f8fafc' }}>
                           <td style={{ padding: '8px' }}>{idx + 1}</td>
                           <td style={{ padding: '8px', fontWeight: 'bold', color: '#0f172a' }}>{b.name}</td>
-                          <td style={{ padding: '8px', textAlign: 'right' }}>₹{total.toLocaleString()}</td>
+                          <td style={{ padding: '8px', textAlign: 'right' }}>₹{gross.toLocaleString()}</td>
                           <td style={{ padding: '8px', textAlign: 'right' }}>₹{net_amount.toLocaleString()}</td>
                           <td style={{ padding: '8px', textAlign: 'right', color: '#dc2626' }}>₹{advance.toLocaleString()}</td>
-                          <td style={{ padding: '8px', textAlign: 'right', fontWeight: 'bold', color: net >= 0 ? '#16a34a' : '#dc2626' }}>₹{net.toLocaleString()}</td>
+                          <td style={{ padding: '8px', textAlign: 'right', fontWeight: 'bold', color: pending === 0 ? '#16a34a' : '#dc2626' }}>₹{pending.toLocaleString()}</td>
                           <td style={{ padding: '8px', textAlign: 'center', fontWeight: 'bold', color: isPaid ? '#16a34a' : '#dc2626' }}>{isPaid ? 'PAID' : 'NOT PAID'}</td>
                           <td style={{ padding: '8px', textAlign: 'center' }}>
                             <button
