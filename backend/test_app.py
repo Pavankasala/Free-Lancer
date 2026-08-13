@@ -315,6 +315,109 @@ class AgriCommissionManagerTestCase(unittest.TestCase):
         confirmed_bill = [b for b in data4['bills'] if b['id'] == bill_id][0]
         self.assertEqual(confirmed_bill['paid'], 'YES')
 
+    def test_14_invoice_hamali_deduction_15_bags(self):
+        """Test invoice hamali deduction: 15 bags × ₹5/bag = ₹75 (not ₹5)
+        
+        Test case:
+        - 15 bags @ ₹200/bag = ₹3,000 gross
+        - Hamali: ₹5/bag = ₹75 total deduction
+        - Commission: 4% of ₹3,000 = ₹120
+        - Damage: 6% of ₹3,000 = ₹180
+        - Net = 3000 - 120 - 75 - 180 = ₹2,625
+        """
+        payload = {
+            'name': 'Invoice Hamali Test',
+            'billdate': '2026-08-13',
+            'no_of_bags': 15,
+            'price': 200,
+            'hamali': 5,
+            'advance': 0
+        }
+        res = self.client.post('/api/add-bill', json=payload, headers=self.auth_headers)
+        data = json.loads(res.data)
+        self.assertEqual(res.status_code, 200)
+        self.assertTrue(data['success'])
+
+        # Fetch the bill via API
+        res2 = self.client.get('/api/home-bills?date=2026-08-13', headers=self.auth_headers)
+        data2 = json.loads(res2.data)
+        found = [b for b in data2['bills'] if b['name'] == 'Invoice Hamali Test']
+        self.assertEqual(len(found), 1)
+        
+        bill = found[0]
+        
+        # Verify bill returns per-bag hamali value
+        self.assertEqual(bill['hamali'], 5, "Backend should return hamali as per-bag rate (5)")
+        self.assertEqual(bill['no_of_bags'], 15, "Backend should return total bags (15)")
+        
+        # Verify calculations for invoice/receipt display (simulating frontend calculation)
+        gross = bill['no_of_bags'] * bill['price']  # 15 * 200 = 3000
+        hamali_per_bag = bill['hamali']  # 5
+        hamali_deduction_for_invoice = hamali_per_bag * bill['no_of_bags']  # 5 * 15 = 75
+        commission = round(gross * 0.04)  # 120
+        damage = round(gross * 0.06)  # 180
+        expected_net = max(0.0, gross - commission - hamali_deduction_for_invoice - damage)  # 2625
+        
+        # The backend net_amount should match this calculation
+        self.assertEqual(bill['net_amount'], expected_net,
+            f"Invoice net_amount should be {expected_net}, got {bill['net_amount']}")
+        
+        # Verify the invoice would display the correct hamali deduction
+        self.assertEqual(hamali_deduction_for_invoice, 75,
+            f"Invoice hamali deduction should be 75 (15 bags × ₹5), not {hamali_deduction_for_invoice}")
+
+    def test_15_multi_channel_invoice_hamali(self):
+        """Test multi-channel bill invoice with correct hamali calculation
+        
+        Test case:
+        - Channel 1: 10 bags @ ₹150/bag = ₹1,500
+        - Channel 2: 8 bags @ ₹150/bag = ₹1,200
+        - Total: 18 bags, gross ₹2,700
+        - Hamali: ₹10/bag = ₹180 total deduction (not ₹10)
+        - Commission: 4% of ₹2,700 = ₹108
+        - Damage: 6% of ₹2,700 = ₹162
+        - Net = 2700 - 108 - 180 - 162 = ₹2,250
+        """
+        payload = {
+            'name': 'Multi-Channel Invoice Test',
+            'billdate': '2026-08-13',
+            'items': [
+                {'bags': 10, 'price': 150},
+                {'bags': 8, 'price': 150}
+            ],
+            'hamali': 10,
+            'advance': 0
+        }
+        res = self.client.post('/api/add-bill', json=payload, headers=self.auth_headers)
+        data = json.loads(res.data)
+        self.assertEqual(res.status_code, 200)
+        self.assertTrue(data['success'])
+
+        # Fetch the bill via API
+        res2 = self.client.get('/api/home-bills?date=2026-08-13', headers=self.auth_headers)
+        data2 = json.loads(res2.data)
+        found = [b for b in data2['bills'] if b['name'] == 'Multi-Channel Invoice Test']
+        self.assertEqual(len(found), 1)
+        
+        bill = found[0]
+        
+        # Verify bill structure
+        self.assertEqual(bill['no_of_bags'], 18, "Total bags should be 18")
+        self.assertEqual(bill['hamali'], 10, "Hamali should be per-bag rate (10)")
+        
+        # Verify invoice display calculation
+        gross = bill['no_of_bags'] * bill['price']  # 18 * 150 = 2700
+        hamali_deduction_for_invoice = bill['hamali'] * bill['no_of_bags']  # 10 * 18 = 180
+        commission = round(gross * 0.04)  # 108
+        damage = round(gross * 0.06)  # 162
+        expected_net = max(0.0, gross - commission - hamali_deduction_for_invoice - damage)  # 2250
+        
+        self.assertEqual(bill['net_amount'], expected_net,
+            f"Invoice net_amount should be {expected_net}, got {bill['net_amount']}")
+        
+        self.assertEqual(hamali_deduction_for_invoice, 180,
+            f"Invoice hamali deduction should be 180 (18 bags × ₹10), not {hamali_deduction_for_invoice}")
+
 if __name__ == '__main__':
     unittest.main()
 

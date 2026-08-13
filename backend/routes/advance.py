@@ -112,12 +112,14 @@ def handle_advance():
         for r in rows:
             r["no_of_bags"] = r.get("display_bags") or r.get("no_of_bags") or 0
             gross = float(r.get("display_total") or 0.0)
-            hamali_val = float(r.get("hamali") or 0.0)
+            hamali_per_bag = float(r.get("hamali") or 0.0)
+            total_bags = int(r.get("no_of_bags") or 0)
+            hamali_deduction = hamali_per_bag * total_bags
             bill_type = str(r.get("type") or "")
             if bill_type == "BUY":
                 commission_val = round(gross * 0.04)
                 damage_val = round(gross * 0.06)
-                net_amount = max(0.0, gross - commission_val - hamali_val - damage_val)
+                net_amount = max(0.0, gross - commission_val - hamali_deduction - damage_val)
             else:
                 net_amount = gross  # BUYER/ADVANCE: no deductions
             adv = float(r.get("advance") or 0.0)

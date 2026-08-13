@@ -1,10 +1,10 @@
 import axios from 'axios';
 import { useEffect, useState } from 'react';
+import { API_BASE_URL } from '../api/config';
+import BillModal from '../components/BillModal';
 import Header from '../components/Header';
 import TimePicker from '../components/TimePicker';
-import BillModal from '../components/BillModal';
 import UserProfileModal from '../components/UserProfileModal';
-import { API_BASE_URL } from '../api/config';
 
 // Returns today's date in local timezone as YYYY-MM-DD
 function localToday() {
@@ -466,10 +466,11 @@ export default function Home({ user, onLogout, onUpdateUser }) {
                 <tbody>
                   {bills.map((b, idx) => {
                     const gross = Number(b.total_amount || (b.no_of_bags * b.price)) || 0;
-                    const hamaliV = Number(b.hamali || 0);
+                    const hamaliPerBag = Number(b.hamali || 0);
+                    const hamaliDeduction = hamaliPerBag * Number(b.no_of_bags || 0);
                     const commission = Math.round(gross * 0.04);
                     const damage = Math.round(gross * 0.06);
-                    const net = Math.max(0, gross - commission - hamaliV - damage);
+                    const net = Math.max(0, gross - commission - hamaliDeduction - damage);
                     return (
                     <tr key={b.id || idx} style={{ borderBottom: '1px solid #e2e8f0', backgroundColor: idx % 2 === 0 ? '#ffffff' : '#f8fafc' }}>
                       <td style={{ padding: '8px' }}>{idx + 1}</td>

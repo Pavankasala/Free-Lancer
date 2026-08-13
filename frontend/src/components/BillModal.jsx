@@ -1,7 +1,7 @@
-import React, { useState } from "react";
-import jsPDF from "jspdf";
-import html2canvas from "html2canvas";
 import axios from "axios";
+import html2canvas from "html2canvas";
+import jsPDF from "jspdf";
+import { useState } from "react";
 import { API_BASE_URL } from "../api/config";
 import "../styles/modal.css";
 
@@ -28,10 +28,8 @@ function BillModal({ bill, isBuyerPage, onClose }) {
 
   // Financial Breakdown calculations
   const grossTotal = Number(bill.total || (totalBagsCount * (Number(bill.price) || 0))) || 0;
-  const hamaliVal =
-    bill.hamali !== undefined && Number(bill.hamali) > 0
-      ? Number(bill.hamali)
-      : totalBagsCount * 5;
+  const hamaliPerBag = bill.hamali !== undefined && Number(bill.hamali) > 0 ? Number(bill.hamali) : 5;
+  const hamaliVal = hamaliPerBag * totalBagsCount;
   const commissionVal =
     bill.commission !== undefined
       ? Number(bill.commission)
