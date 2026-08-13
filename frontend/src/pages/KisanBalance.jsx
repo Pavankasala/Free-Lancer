@@ -1,8 +1,13 @@
 import axios from 'axios';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { API_BASE_URL } from '../api/config';
 import BillModal from '../components/BillModal';
 import Header from '../components/Header';
+
+// Delay (ms) after a single click before the print modal opens.
+// Any second click arriving within this window cancels the modal and
+// triggers the double-click action instead.
+const CLICK_DELAY_MS = 250;
 
 export default function KisanBalance({ user, onLogout }) {
   const [selectedYear, setSelectedYear] = useState('2026');
@@ -12,6 +17,10 @@ export default function KisanBalance({ user, onLogout }) {
   const [selectedBill, setSelectedBill] = useState(null);
   // Track which bill id is currently being marked paid to show feedback
   const [markingPaidId, setMarkingPaidId] = useState(null);
+
+  // Single ref holds the pending single-click timer so it can be cancelled
+  // from any double-click handler regardless of which bill was clicked.
+  const clickTimerRef = useRef(null);
 
   const years = [];
   for (let y = 2017; y <= 2060; y++) {
@@ -42,10 +51,12 @@ export default function KisanBalance({ user, onLogout }) {
   // /api/mark-bill-paid/<id> endpoint, then refresh the balance table.
   // The backend UPDATE is idempotent — calling it repeatedly on an already-paid
   // bill simply sets paid='YES' again without creating duplicates or side-effects.
-  const handleDoubleClickMarkPaid = async (bill) => {
+  const handleMarkPaid = async (bill) => {
     if (bill.paid === 'YES') return; // already paid — nothing to do
     const billId = bill.id;
     if (!billId) return;
+    // Prevent a second API call while one is already in flight
+    if (markingPaidId === billId) return;
 
     setMarkingPaidId(billId);
     try {
@@ -66,6 +77,37 @@ export default function KisanBalance({ user, onLogout }) {
       setMarkingPaidId(null);
     }
   };
+
+  // Single click: schedule the print modal to open after CLICK_DELAY_MS.
+  // If a second click arrives within that window the timer is cancelled by
+  // handleDoubleClick before it fires.
+  const handleClick = (bill) => {
+    // Clear any previous pending timer (e.g. user clicked a different row quickly)
+    if (clickTimerRef.current) {
+      clearTimeout(clickTimerRef.current);
+      clickTimerRef.current = null;
+    }
+    clickTimerRef.current = setTimeout(() => {
+      clickTimerRef.current = null;
+      setSelectedBill(bill);
+    }, CLICK_DELAY_MS);
+  };
+
+  // Double click: cancel the pending single-click timer, then mark as paid.
+  const handleDoubleClick = (bill) => {
+    if (clickTimerRef.current) {
+      clearTimeout(clickTimerRef.current);
+      clickTimerRef.current = null;
+    }
+    handleMarkPaid(bill);
+  };
+
+  // Clean up any dangling timer when the component unmounts.
+  useEffect(() => {
+    return () => {
+      if (clickTimerRef.current) clearTimeout(clickTimerRef.current);
+    };
+  }, []);
 
   // Total balance = sum of backend-computed pending_balance values.
   // This uses the same field the individual rows display, so they stay in sync.
@@ -184,10 +226,11 @@ export default function KisanBalance({ user, onLogout }) {
                           <td style={{ padding: '8px', textAlign: 'center' }}>
                             <button
                               type="button"
-                              // Single click → open invoice/print modal (existing behavior)
-                              onClick={() => setSelectedBill(b)}
-                              // Double click → mark this bill as PAID in the backend
-                              onDoubleClick={() => handleDoubleClickMarkPaid(b)}
+                              // Single click: open print modal after a short delay so a
+                              // second click can cancel it and trigger mark-paid instead.
+                              onClick={() => handleClick(b)}
+                              // Double click: cancel the pending modal open; mark as PAID.
+                              onDoubleClick={() => handleDoubleClick(b)}
                               disabled={isMarking}
                               title={isPaid ? 'Bill already paid' : 'Click to print · Double-click to mark as PAID'}
                               style={{
